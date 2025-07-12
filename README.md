@@ -1,19 +1,41 @@
 # P-touch ESP32 Label Printer Server
 
-A web-based label printing server for Brother P-touch printers using ESP32-S3 with USB Host support.
+A web-based label printing server for Brother P-touch printers using ESP32-S3.
 
-## Features
+## ⚠️ **Current Status**
 
-- 🖨️ **Brother P-touch Printer Support**: Compatible with 20+ Brother P-touch models
+This project is **under development**. The web server and interface are functional, but **USB Host functionality is not currently available** in the Arduino ESP32 framework.
+
+**What Works:**
+- ✅ Web server with responsive interface
+- ✅ WiFi connectivity and configuration
+- ✅ REST API endpoints
+- ✅ WebSocket communication
+- ✅ Printer status simulation
+- ✅ Project compiles and runs successfully
+
+**What Doesn't Work Yet:**
+- ❌ Direct USB connection to printers (Arduino framework limitation)
+- ❌ Actual printing functionality
+- ❌ Real printer detection and status
+
+**Roadmap:**
+- 🔄 Convert to ESP-IDF framework for full USB Host support
+- 🔄 Add USB Host Shield support as alternative
+- 🔄 Explore WiFi/Bluetooth printer connectivity
+
+## Features (Planned/Partial)
+
+- 🖨️ **Brother P-touch Printer Support**: Compatible with 20+ Brother P-touch models (when USB Host is implemented)
 - 🌐 **Web Interface**: Modern, responsive web interface for label design and printing
 - 📱 **Mobile Friendly**: Works on desktop, tablet, and mobile devices
-- 🔌 **USB Host**: Direct USB connection to printers (no drivers needed)
-- 🎨 **Label Design**: Text labels and simple graphics design tools
-- 📊 **Real-time Status**: Live printer status monitoring via WebSocket
-- 🏷️ **Multiple Formats**: Support for various tape sizes and types
-- 🔄 **Auto-reconnect**: Automatic printer detection and reconnection
+- 🔌 **USB Host**: Direct USB connection to printers *(requires ESP-IDF framework)*
+- 🎨 **Label Design**: Text labels and simple graphics design tools *(web interface ready)*
+- 📊 **Real-time Status**: Live printer status monitoring via WebSocket *(simulated)*
+- 🏷️ **Multiple Formats**: Support for various tape sizes and types *(when printing works)*
+- 🔄 **Auto-reconnect**: Automatic printer detection and reconnection *(when USB Host works)*
 
-## Supported Printers
+## Supported Printers (When USB Host is Implemented)
 
 - PT-D450, PT-D460BT, PT-D410, PT-D600, PT-D610BT
 - PT-P700, PT-P750W, PT-P710BT
@@ -25,25 +47,49 @@ A web-based label printing server for Brother P-touch printers using ESP32-S3 wi
 
 ## Hardware Requirements
 
-- **ESP32-S3-DevKitC-1** (or compatible ESP32-S3 board with USB Host support)
-- **Brother P-touch Label Printer** (see supported models above)
-- **USB Cable** (USB-A to Micro-B or USB-C depending on printer model)
+- **ESP32-S3-DevKitC-1** (or compatible ESP32-S3 board)
+- **Brother P-touch Label Printer** (for future USB Host implementation)
+- **USB Cable** (for future use)
 - **WiFi Network**
 
 ## Installation
 
-### 1. Download and Setup
+### 1. Install PlatformIO using uv (Recommended)
+
+**Install uv (if not already installed):**
+```bash
+# Install uv package manager
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source $HOME/.local/bin/env
+```
+
+**Install PlatformIO:**
+```bash
+# Install PlatformIO as an isolated tool using uv
+uv tool install platformio
+```
+
+**Alternative Installation Methods:**
+```bash
+# Using pip (if you prefer)
+pip install platformio
+
+# Using conda
+conda install -c conda-forge platformio
+
+# Using brew (macOS)
+brew install platformio
+```
+
+### 2. Download and Setup
 
 ```bash
 # Clone the repository
 git clone https://github.com/tanvach/ptouch-esp32.git
 cd ptouch-esp32
-
-# Install PlatformIO if not already installed
-pip install platformio
 ```
 
-### 2. Quick Configuration
+### 3. Configuration
 
 **Option A: Automated Setup (Recommended)**
 ```bash
@@ -72,12 +118,6 @@ const char* WIFI_PASSWORD = "Your_WiFi_Password";
 
 **Note**: The `config.h` file is automatically excluded from version control, so your credentials remain secure when publishing to GitHub.
 
-### 3. Hardware Setup
-
-1. Connect your Brother P-touch printer to the ESP32-S3 via USB
-2. Power on both the ESP32-S3 and the printer
-3. The ESP32 will automatically detect the printer on boot
-
 ### 4. Build and Upload
 
 ```bash
@@ -87,33 +127,29 @@ pio run
 # Upload firmware to ESP32-S3
 pio run --target upload
 
-# Upload web interface files to ESP32-S3
-pio run --target uploadfs
-
 # Monitor serial output to see the assigned IP address
 pio device monitor
 ```
 
-## Usage
+## Current Usage
 
 ### Web Interface
 
 1. After uploading, open the Serial Monitor to see the IP address
 2. Navigate to `http://[ESP32_IP_ADDRESS]` in your web browser
 3. The interface will show:
-   - **Printer Status**: Connection status, tape info, and printer model
-   - **Text Labels**: Simple text input with font size options
-   - **Design Tools**: Canvas-based design tools for custom labels
-   - **Print Queue**: Queue management for multiple print jobs
+   - **Printer Status**: Simulated connection status and printer info
+   - **Text Labels**: Text input interface (printing not functional yet)
+   - **Print Queue**: Interface for future print job management
 
 ### API Endpoints
 
-The server provides REST API endpoints for integration:
+The server provides REST API endpoints (printing commands return errors about USB Host limitations):
 
-- `GET /api/status` - Get printer status
-- `POST /api/print/text` - Print text label
-- `POST /api/print/image` - Print image (base64 encoded)
-- `POST /api/reconnect` - Reconnect to printer
+- `GET /api/status` - Get simulated printer status
+- `POST /api/print/text` - Text printing interface (returns error)
+- `POST /api/print/image` - Image printing interface (not implemented)
+- `POST /api/reconnect` - Reconnection attempt (returns error)
 - `GET /api/printers` - List supported printers
 
 ### WebSocket Events
@@ -124,7 +160,7 @@ Real-time communication via WebSocket at `/ws`:
 // Connect to WebSocket
 const ws = new WebSocket('ws://[ESP32_IP]/ws');
 
-// Send commands
+// Send commands (will receive error responses)
 ws.send(JSON.stringify({
     command: 'printText',
     text: 'Hello World!'
@@ -137,9 +173,9 @@ ws.onmessage = (event) => {
 };
 ```
 
-## Library Usage
+## Library Usage (Future)
 
-The `PtouchPrinter` class can be used in your own Arduino projects:
+When USB Host functionality is implemented, the `PtouchPrinter` class will work like this:
 
 ```cpp
 #include "ptouch_esp32.h"
@@ -149,16 +185,15 @@ PtouchPrinter printer;
 void setup() {
     Serial.begin(115200);
     
-    // Initialize printer
+    // Currently prints error messages about USB Host limitations
     if (printer.begin()) {
         if (printer.detectPrinter()) {
             if (printer.connect()) {
                 Serial.println("Printer connected!");
                 
-                // Print text
+                // These will work when USB Host is implemented
                 printer.printText("Hello World!");
                 
-                // Print bitmap
                 uint8_t bitmap[16] = {0xFF, 0x81, 0x81, 0xFF, ...};
                 printer.printBitmap(bitmap, 32, 8);
             }
@@ -167,7 +202,7 @@ void setup() {
 }
 
 void loop() {
-    // Check printer status
+    // Currently returns false due to USB Host limitations
     if (printer.isConnected()) {
         if (printer.getStatus()) {
             Serial.println("Printer is ready");
@@ -185,7 +220,8 @@ ptouch-esp32/
 ├── platformio.ini          # PlatformIO configuration
 ├── setup.sh               # Automated setup script
 ├── include/
-│   └── config.example.h   # Configuration template
+│   ├── config.example.h   # Configuration template
+│   └── config.h           # Your credentials (Git ignored)
 ├── src/
 │   └── main.cpp           # Main application
 ├── lib/
@@ -221,24 +257,29 @@ pio run
 # 3. Upload firmware to ESP32-S3
 pio run --target upload
 
-# 4. Upload web interface files to ESP32-S3
-pio run --target uploadfs
-
-# 5. Monitor serial output to see IP address
+# 4. Monitor serial output to see IP address
 pio device monitor
 ```
 
+### Working on USB Host Support
+
+To implement actual USB Host functionality, the project needs to be converted to use the ESP-IDF framework instead of Arduino:
+
+1. **ESP-IDF Conversion**: Migrate to ESP-IDF which has full USB Host APIs
+2. **USB Host Shield**: Add external USB Host controller hardware
+3. **Alternative Connectivity**: Implement WiFi or Bluetooth printer support
+
 ### Adding New Printer Models
 
-To add support for new Brother P-touch models:
+To add support for new Brother P-touch models (for future USB Host implementation):
 
 1. Add the printer information to `supported_devices[]` in `ptouch_printer.cpp`
 2. Include the USB VID/PID and printer-specific flags
-3. Test with the new printer model
+3. Test with the new printer model when USB Host is working
 
 ### Web Interface Development
 
-The web interface files are in the `data/` folder:
+The web interface files are in the `data/` folder and are fully functional:
 - `index.html` - Main HTML structure
 - `style.css` - Styling and responsive design
 - `script.js` - JavaScript functionality and WebSocket communication
@@ -252,12 +293,15 @@ The web interface files are in the `data/` folder:
 3. **Compilation errors**: Ensure `config.h` exists and has valid syntax
 4. **Setup script not executable**: Run `chmod +x setup.sh` first
 
-### Printer Not Detected
+### USB Host Error Messages
 
-1. Ensure the printer is powered on and connected via USB
-2. Check that the printer is not in P-Lite mode (switch to position "E")
-3. Verify the USB cable is working
-4. Check the Serial Monitor for error messages
+If you see messages like "ERROR: USB Host functionality not available in Arduino framework", this is expected. The current Arduino ESP32 framework doesn't provide the necessary USB Host APIs.
+
+**Solutions:**
+- Wait for ESP-IDF conversion (planned)
+- Contribute to ESP-IDF conversion effort
+- Use USB Host Shield hardware
+- Explore WiFi/Bluetooth printer connectivity
 
 ### Connection Issues
 
@@ -267,12 +311,43 @@ The web interface files are in the `data/` folder:
 4. Check firewall settings
 5. Ensure ESP32 is connected to WiFi (check serial output)
 
-### Print Quality Issues
+### PlatformIO Installation Issues
 
-1. Ensure the tape is properly installed
-2. Check tape width matches the printer specifications
-3. Verify the label design fits within the printable area
-4. Clean the print head if necessary
+**With uv (recommended):**
+```bash
+# If uv command not found, restart shell or run:
+source $HOME/.local/bin/env
+
+# If installation fails, try:
+uv tool install --force platformio
+```
+
+**Alternative solutions:**
+```bash
+# Use pip instead
+pip install platformio
+
+# Or use conda
+conda install -c conda-forge platformio
+```
+
+## Technical Details
+
+### USB Host Limitation
+
+The Arduino ESP32 framework doesn't expose the USB Host APIs that are available in ESP-IDF. This project includes placeholder implementations that:
+
+- Compile successfully
+- Display informative error messages
+- Provide the correct API structure for future implementation
+
+### Current Implementation
+
+- **Web Server**: Fully functional using ESPAsyncWebServer
+- **WiFi**: Complete WiFi connectivity and management
+- **APIs**: REST and WebSocket endpoints work (return appropriate errors for printer functions)
+- **Configuration**: Secure credential management system
+- **Library Structure**: Complete P-touch printer library structure (ready for USB Host)
 
 ## Security
 
@@ -292,25 +367,17 @@ The configuration system ensures:
 - ✅ Template file shows required configuration format
 - ✅ Setup script simplifies initial configuration
 
-### Setup Process
-
-```bash
-# Quick setup (creates config.h from template)
-./setup.sh
-
-# Or manually:
-cp include/config.example.h include/config.h
-nano include/config.h  # Edit with your credentials
-```
-
-### Publishing to GitHub
-
-When publishing this project:
-1. Your `config.h` file with credentials will be automatically excluded
-2. The `config.example.h` template will be included for other users
-3. Users can run `./setup.sh` to quickly configure their own credentials
-
 ## Contributing
+
+We welcome contributions, especially for:
+
+1. **ESP-IDF Conversion**: Help convert the project to ESP-IDF framework
+2. **USB Host Shield Support**: Add support for external USB Host controllers
+3. **Alternative Connectivity**: WiFi or Bluetooth printer support
+4. **Web Interface**: Improvements to the user interface
+5. **Documentation**: Better setup guides and troubleshooting
+
+### Development Process
 
 1. Fork the repository
 2. Create a feature branch
@@ -327,6 +394,7 @@ This project is licensed under the MIT License. See the LICENSE file for details
 - Original [ptouch-print](https://git.familie-radermacher.ch/linux/ptouch-print.git) library by Dominic Radermacher
 - ESP32 Arduino Core by Espressif Systems
 - WebSocket and HTTP libraries by the Arduino community
+- [uv](https://github.com/astral-sh/uv) package manager by Astral
 
 ## Support
 
@@ -334,6 +402,7 @@ For issues and questions:
 - Open an issue on GitHub
 - Check the troubleshooting section above
 - Review the Brother P-touch printer documentation
+- See current limitations section for known issues
 
 ---
 
