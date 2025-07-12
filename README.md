@@ -32,33 +32,31 @@ A web-based label printing server for Brother P-touch printers using ESP32-S3 wi
 
 ## Installation
 
-### 1. PlatformIO Setup
+### 1. Download and Setup
 
 ```bash
 # Clone the repository
-git clone https://github.com/youruser/ptouch-esp32.git
+git clone https://github.com/tanvach/ptouch-esp32.git
 cd ptouch-esp32
 
 # Install PlatformIO if not already installed
 pip install platformio
-
-# Build and upload
-pio run --target upload
-
-# Upload filesystem (web interface files)
-pio run --target uploadfs
 ```
 
-### 2. Configuration
+### 2. Quick Configuration
 
-**WiFi Setup**: Copy the configuration template and customize with your credentials:
+**Option A: Automated Setup (Recommended)**
+```bash
+# Run the setup script (creates config.h and provides guidance)
+./setup.sh
+```
 
+**Option B: Manual Setup**
 ```bash
 # Copy the configuration template
 cp include/config.example.h include/config.h
 
 # Edit the configuration file with your WiFi credentials
-# Use your preferred text editor
 nano include/config.h
 ```
 
@@ -79,6 +77,22 @@ const char* WIFI_PASSWORD = "Your_WiFi_Password";
 1. Connect your Brother P-touch printer to the ESP32-S3 via USB
 2. Power on both the ESP32-S3 and the printer
 3. The ESP32 will automatically detect the printer on boot
+
+### 4. Build and Upload
+
+```bash
+# Build the project
+pio run
+
+# Upload firmware to ESP32-S3
+pio run --target upload
+
+# Upload web interface files to ESP32-S3
+pio run --target uploadfs
+
+# Monitor serial output to see the assigned IP address
+pio device monitor
+```
 
 ## Usage
 
@@ -169,10 +183,13 @@ void loop() {
 ```
 ptouch-esp32/
 ├── platformio.ini          # PlatformIO configuration
+├── setup.sh               # Automated setup script
+├── include/
+│   └── config.example.h   # Configuration template
 ├── src/
-│   └── main.cpp            # Main application
+│   └── main.cpp           # Main application
 ├── lib/
-│   └── ptouch-esp32/       # P-touch library
+│   └── ptouch-esp32/      # P-touch library
 │       ├── include/
 │       │   └── ptouch_esp32.h
 │       └── src/
@@ -180,10 +197,13 @@ ptouch-esp32/
 │           ├── ptouch_printing.cpp
 │           ├── ptouch_image.cpp
 │           └── ptouch_utils.cpp
-├── data/                   # Web interface files
+├── data/                  # Web interface files
 │   ├── index.html
 │   ├── style.css
 │   └── script.js
+├── examples/              # Usage examples
+│   └── basic_printing/
+│       └── basic_printing.ino
 └── README.md
 ```
 
@@ -192,16 +212,19 @@ ptouch-esp32/
 ### Building
 
 ```bash
-# Build for ESP32-S3
+# 1. Configure your WiFi credentials first
+./setup.sh
+
+# 2. Build the project
 pio run
 
-# Upload firmware
+# 3. Upload firmware to ESP32-S3
 pio run --target upload
 
-# Upload web files
+# 4. Upload web interface files to ESP32-S3
 pio run --target uploadfs
 
-# Monitor serial output
+# 5. Monitor serial output to see IP address
 pio device monitor
 ```
 
@@ -222,6 +245,13 @@ The web interface files are in the `data/` folder:
 
 ## Troubleshooting
 
+### Configuration Issues
+
+1. **Missing config.h file**: Run `./setup.sh` or manually copy `include/config.example.h` to `include/config.h`
+2. **WiFi connection fails**: Double-check SSID and password in `include/config.h`
+3. **Compilation errors**: Ensure `config.h` exists and has valid syntax
+4. **Setup script not executable**: Run `chmod +x setup.sh` first
+
 ### Printer Not Detected
 
 1. Ensure the printer is powered on and connected via USB
@@ -231,10 +261,11 @@ The web interface files are in the `data/` folder:
 
 ### Connection Issues
 
-1. Verify WiFi credentials are correct
+1. Verify WiFi credentials are correct in `include/config.h`
 2. Check that the ESP32 and your device are on the same network
-3. Try accessing the IP address directly
+3. Try accessing the IP address directly (shown in serial monitor)
 4. Check firewall settings
+5. Ensure ESP32 is connected to WiFi (check serial output)
 
 ### Print Quality Issues
 
