@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P-touch ESP32 Label Printer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🏷️ P-touch ESP32 Label Printer</h1>
+            <div class="device-info">
+                <span class="wifi-info">📶 %WIFI_SSID% (%IP_ADDRESS%)</span>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <!-- Printer Status Panel -->
+            <div class="panel status-panel">
+                <h2>🖨️ Printer Status</h2>
+                <div class="status-content">
+                    <div class="status-indicator">
+                        <div class="status-dot" id="statusDot"></div>
+                        <span id="statusText">Checking...</span>
+                    </div>
+                    <div class="printer-info" id="printerInfo">
+                        <div class="info-item">
+                            <span class="label">Model:</span>
+                            <span id="printerModel">Unknown</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Tape:</span>
+                            <span id="tapeInfo">Unknown</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Size:</span>
+                            <span id="sizeInfo">Unknown</span>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button id="reconnectBtn" class="btn btn-secondary">🔄 Reconnect</button>
+                        <button id="refreshBtn" class="btn btn-secondary">🔄 Refresh</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Print Panel -->
+            <div class="panel print-panel">
+                <h2>📝 Create Label</h2>
+                <div class="print-content">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="text">📝 Text</button>
+                        <button class="tab-btn" data-tab="design">🎨 Design</button>
+                    </div>
+
+                    <!-- Text Tab -->
+                    <div class="tab-content active" id="textTab">
+                        <div class="form-group">
+                            <label for="textInput">Enter text to print:</label>
+                            <input type="text" id="textInput" placeholder="Enter your label text..." maxlength="50">
+                        </div>
+                        <div class="form-group">
+                            <label for="fontSize">Font size:</label>
+                            <select id="fontSize">
+                                <option value="8">Small (8pt)</option>
+                                <option value="12" selected>Medium (12pt)</option>
+                                <option value="16">Large (16pt)</option>
+                                <option value="20">Extra Large (20pt)</option>
+                            </select>
+                        </div>
+                        <div class="preview-section">
+                            <label>Preview:</label>
+                            <div class="preview-container">
+                                <canvas id="textPreview" width="200" height="50"></canvas>
+                            </div>
+                        </div>
+                        <button id="printTextBtn" class="btn btn-primary">🖨️ Print Text</button>
+                    </div>
+
+                    <!-- Design Tab -->
+                    <div class="tab-content" id="designTab">
+                        <div class="form-group">
+                            <label>Canvas size:</label>
+                            <div class="size-controls">
+                                <label>Width: <input type="number" id="canvasWidth" value="200" min="50" max="400"></label>
+                                <label>Height: <input type="number" id="canvasHeight" value="50" min="20" max="120"></label>
+                            </div>
+                        </div>
+                        <div class="design-tools">
+                            <div class="tool-group">
+                                <label>Tools:</label>
+                                <button class="tool-btn active" data-tool="text">📝</button>
+                                <button class="tool-btn" data-tool="line">📏</button>
+                                <button class="tool-btn" data-tool="rect">⬜</button>
+                                <button class="tool-btn" data-tool="circle">⭕</button>
+                            </div>
+                            <div class="tool-group">
+                                <button class="btn btn-secondary" id="clearCanvas">🗑️ Clear</button>
+                                <button class="btn btn-secondary" id="undoBtn">↶ Undo</button>
+                            </div>
+                        </div>
+                        <div class="canvas-container">
+                            <canvas id="designCanvas" width="200" height="50"></canvas>
+                        </div>
+                        <button id="printDesignBtn" class="btn btn-primary">🖨️ Print Design</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Print Queue Panel -->
+            <div class="panel queue-panel">
+                <h2>📋 Print Queue</h2>
+                <div class="queue-content">
+                    <div class="queue-list" id="queueList">
+                        <div class="queue-empty">No print jobs in queue</div>
+                    </div>
+                    <div class="queue-actions">
+                        <button id="clearQueueBtn" class="btn btn-secondary">🗑️ Clear Queue</button>
+                        <button id="printQueueBtn" class="btn btn-primary">🖨️ Print All</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="footer">
+            <p>P-touch ESP32 Label Printer Server</p>
+            <p>Connected to: <span id="connectionStatus">Connecting...</span></p>
+        </footer>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">🔄</div>
+        <div class="loading-text">Processing...</div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
