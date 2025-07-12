@@ -4,7 +4,6 @@
 #include <Arduino.h>
 #include <stdint.h>
 #include <USB.h>
-#include <USBHost.h>
 
 // Brother P-touch printer constants
 #define PTOUCH_VID                 0x04F9
@@ -81,13 +80,13 @@ struct __attribute__((packed, aligned(4))) ptouch_stat {
 // Main printer device class
 class PtouchPrinter {
 private:
-    USBHost *usb_host;
-    USBDevice *printer_device;
+    void *usb_host;  // Placeholder for USB Host (not available in Arduino framework)
     pt_dev_info *device_info;
     ptouch_stat *status;
     uint16_t tape_width_px;
     bool is_connected;
     bool is_initialized;
+    bool verbose_mode;
     
     // USB communication methods
     int usbSend(uint8_t *data, size_t len);

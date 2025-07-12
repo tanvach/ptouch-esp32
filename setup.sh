@@ -11,7 +11,7 @@ if [ -f "include/config.h" ]; then
 else
     echo "📋 Creating configuration file..."
     cp include/config.example.h include/config.h
-    echo "✅ Configuration file created at include/config.h"
+    ePlatformIOcho "✅ Configuration file created at include/config.h"
 fi
 
 echo

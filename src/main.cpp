@@ -373,7 +373,7 @@ String processorPlaceholder(const String& var) {
     } else if (var == "PRINTER_STATUS") {
         return printerStatus;
     } else if (var == "WIFI_SSID") {
-        return ssid;
+        return WIFI_SSID;
     } else if (var == "IP_ADDRESS") {
         return WiFi.localIP().toString();
     }
