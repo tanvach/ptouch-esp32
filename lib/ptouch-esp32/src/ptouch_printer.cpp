@@ -335,6 +335,14 @@ void PtouchPrinter::disconnect() {
     }
     
     device_info = nullptr;
+    if (status) {
+        memset(status, 0, sizeof(ptouch_stat));
+    }
+    tape_width_px = 0;
+    
+    if (verbose_mode) {
+        ESP_LOGI(TAG, "Disconnected from printer");
+    }
 }
 
 // Send data to printer via USB
@@ -457,15 +465,12 @@ int PtouchPrinter::initPrinter() {
         vTaskDelay(pdMS_TO_TICKS(100));
     }
     
-    // Send invalidate command
-    uint8_t invalidate[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-    if (usbSend(invalidate, sizeof(invalidate)) < 0) {
-        return -1;
-    }
-    
-    // Initialize command
-    uint8_t init[] = {0x1b, 0x40};  // ESC @
-    if (usbSend(init, sizeof(init)) < 0) {
+    // Send 102-byte invalidate command (100 zeros + ESC @) - FIXED
+    uint8_t invalidate_cmd[102];
+    memset(invalidate_cmd, 0, 100);  // First 100 bytes are zero
+    invalidate_cmd[100] = 0x1b;      // ESC
+    invalidate_cmd[101] = 0x40;      // @
+    if (usbSend(invalidate_cmd, sizeof(invalidate_cmd)) < 0) {
         return -1;
     }
     
@@ -480,19 +485,29 @@ int PtouchPrinter::initPrinter() {
 
 // Enable PackBits compression
 int PtouchPrinter::enablePackBits() {
-    uint8_t cmd[] = {0x1b, 0x69, 0x4b, 0x08};  // Enable compression
+    uint8_t cmd[] = {0x4d, 0x02};  // 4D 02 = enable packbits compression mode - FIXED
     return (usbSend(cmd, sizeof(cmd)) > 0) ? 0 : -1;
 }
 
 // Send info command for newer printers
 int PtouchPrinter::sendInfoCommand(int size_x) {
-    uint8_t cmd[] = {0x1b, 0x69, 0x7a, 
-                     (uint8_t)((size_x >> 0) & 0xff),
-                     (uint8_t)((size_x >> 8) & 0xff),
-                     (uint8_t)((size_x >> 16) & 0xff),
-                     (uint8_t)((size_x >> 24) & 0xff),
-                     0x00, 0x00, 0x00, 0x00, 0x00};
-    return (usbSend(cmd, sizeof(cmd)) > 0) ? 0 : -1;
+    uint8_t cmd[] = {0x1b, 0x69, 0x7a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    
+    // Set media width (n3) - FIXED
+    cmd[5] = status ? status->media_width : 0;
+    
+    // Set raster number (n5-n8) - FIXED positioning
+    cmd[7] = (uint8_t)(size_x & 0xff);
+    cmd[8] = (uint8_t)((size_x >> 8) & 0xff);
+    cmd[9] = (uint8_t)((size_x >> 16) & 0xff);
+    cmd[10] = (uint8_t)((size_x >> 24) & 0xff);
+    
+    // D460BT magic flag handling - FIXED
+    if (device_info && (device_info->flags & FLAG_D460BT_MAGIC)) {
+        cmd[11] = 0x02;  // n9 is set to 2 for D460BT
+    }
+    
+    return (usbSend(cmd, sizeof(cmd) - 1) > 0) ? 0 : -1;  // sizeof(cmd) - 1 like original
 }
 
 // Send pre-cut command
@@ -503,34 +518,54 @@ int PtouchPrinter::sendPreCutCommand(int precut) {
 
 // Send magic commands for D460BT series
 int PtouchPrinter::sendMagicCommands() {
-    uint8_t magic1[] = {0x1b, 0x69, 0x61, 0x01};
-    uint8_t magic2[] = {0x1b, 0x69, 0x21, 0x00};
+    // Send D460BT chain command first - FIXED
+    uint8_t chain_cmd[] = {0x1b, 0x69, 0x4b, 0x00};
+    if (usbSend(chain_cmd, sizeof(chain_cmd)) < 0) return -1;
     
-    if (usbSend(magic1, sizeof(magic1)) < 0) return -1;
-    if (usbSend(magic2, sizeof(magic2)) < 0) return -1;
+    // Send D460BT magic command - FIXED
+    uint8_t magic_cmd[] = {0x1b, 0x69, 0x64, 0x0e, 0x00, 0x4d, 0x00};
+    if (usbSend(magic_cmd, sizeof(magic_cmd)) < 0) return -1;
     
     return 0;
 }
 
 // Start raster mode
 int PtouchPrinter::rasterStart() {
-    uint8_t cmd[] = {0x1b, 0x69, 0x52, 0x01};  // Enter raster mode
-    return (usbSend(cmd, sizeof(cmd)) > 0) ? 0 : -1;
+    // Different commands for different printer series - FIXED
+    if (device_info && (device_info->flags & FLAG_P700_INIT)) {
+        uint8_t cmd[] = {0x1b, 0x69, 0x61, 0x01};  // Switch mode for P700 series
+        return (usbSend(cmd, sizeof(cmd)) > 0) ? 0 : -1;
+    } else {
+        uint8_t cmd[] = {0x1b, 0x69, 0x52, 0x01};  // Select graphics transfer mode = Raster
+        return (usbSend(cmd, sizeof(cmd)) > 0) ? 0 : -1;
+    }
 }
 
 // Send a raster line
 int PtouchPrinter::sendRasterLine(uint8_t *data, size_t len) {
-    if (len > 90) {  // Maximum raster line length
+    if (len > (size_t)(device_info->max_px / 8)) {  // Check against max pixels
         ESP_LOGE(TAG, "Raster line too long");
         return -1;
     }
     
     uint8_t cmd[128];
     cmd[0] = 0x47;  // Raster line command
-    cmd[1] = (uint8_t)len;
-    memcpy(&cmd[2], data, len);
     
-    return (usbSend(cmd, len + 2) > 0) ? 0 : -1;
+    // Handle PackBits compression - FIXED
+    if (device_info && (device_info->flags & FLAG_RASTER_PACKBITS)) {
+        // Fake compression by encoding a single uncompressed run
+        cmd[1] = (uint8_t)(len + 1);
+        cmd[2] = 0;
+        cmd[3] = (uint8_t)(len - 1);
+        memcpy(&cmd[4], data, len);
+        return (usbSend(cmd, len + 4) > 0) ? 0 : -1;
+    } else {
+        // Uncompressed mode
+        cmd[1] = (uint8_t)len;
+        cmd[2] = 0;
+        memcpy(&cmd[3], data, len);
+        return (usbSend(cmd, len + 3) > 0) ? 0 : -1;
+    }
 }
 
 // Set pixel in raster line (ported from original)
@@ -653,24 +688,37 @@ const char* PtouchPrinter::getTextColor() const {
     return pt_textcolor_string(status ? status->text_color : 0);
 }
 
-// Page control methods (stub implementations for now)
+// Page control methods - FIXED implementations
 bool PtouchPrinter::setPageFlags(pt_page_flags flags) {
-    // Implementation would depend on specific printer commands
-    return true;
+    uint8_t cmd[] = {0x1b, 0x69, 0x4d, (uint8_t)flags};
+    return (usbSend(cmd, sizeof(cmd)) > 0);
 }
 
 bool PtouchPrinter::feedPaper(int amount) {
-    // Implementation would send paper feed commands
+    // Send line feed command
+    uint8_t cmd[] = {0x5a};  // Line feed
+    for (int i = 0; i < amount; i++) {
+        if (usbSend(cmd, sizeof(cmd)) < 0) {
+            return false;
+        }
+    }
     return true;
 }
 
 bool PtouchPrinter::cutPaper() {
-    // Implementation would send paper cut commands
-    return true;
+    // Send form feed command (advance but don't cut)
+    uint8_t cmd[] = {0x0c};  // Form feed
+    return (usbSend(cmd, sizeof(cmd)) > 0);
 }
 
 bool PtouchPrinter::finalizePrint(bool chain) {
-    // Send print completion commands
-    uint8_t cmd[] = {0x1b, 0x69, 0x41, 0x01};  // Print command
-    return (usbSend(cmd, sizeof(cmd)) > 0);
+    // Send print completion commands - FIXED
+    uint8_t cmd_eject[] = {0x1a};  // Print command with feeding
+    uint8_t cmd_chain[] = {0x0c};  // Print command (no cut)
+    
+    // D460BT devices use different logic for chaining
+    bool use_chain = chain && !(device_info && (device_info->flags & FLAG_D460BT_MAGIC));
+    uint8_t *cmd = use_chain ? cmd_chain : cmd_eject;
+    
+    return (usbSend(cmd, 1) > 0);
 } 
