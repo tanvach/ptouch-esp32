@@ -2,26 +2,54 @@
 
 ## Overview
 
-This testing framework provides comprehensive validation of the P-touch ESP32 codebase **without requiring actual ESP32 hardware or Brother P-touch printers**. It uses mocking and simulation to test all critical functionality.
+This testing framework provides comprehensive validation of the P-touch ESP32 codebase with **two complementary approaches**:
+
+1. **Native Mock Testing** (`test/` directory): Tests run on any development machine without hardware
+2. **🆕 ESP32-S3 Hardware Testing** (`test/hardware/` directory): Tests run directly on real ESP32-S3 hardware
+
+## Testing Strategies
+
+### Native Mock Testing (Existing)
+- ✅ **Fast Development**: Instant feedback during development
+- ✅ **CI/CD Friendly**: No hardware required for automation
+- ✅ **Comprehensive Mocking**: Simulates USB Host, WiFi, and hardware APIs
+- ✅ **Protocol Validation**: Tests Brother P-touch protocol logic
+
+### 🆕 ESP32-S3 Hardware Testing (New)
+- ✅ **Real Hardware Validation**: Tests actual ESP-IDF USB Host API calls
+- ✅ **Progressive Testing**: Bridge between mocks and full P-touch integration  
+- ✅ **Zero P-touch Dependency**: Validates core functionality without printers
+- ✅ **Performance Testing**: Real timing, memory usage, and system limits
 
 ## Design Principles
 
 1. **Complete Separation**: Zero impact on production code
-2. **Hardware Independence**: All tests run on any development machine
-3. **Comprehensive Coverage**: Unit, integration, and protocol-level tests
-4. **CI/CD Ready**: Automated testing in GitHub Actions
-5. **Easy Maintenance**: Clear structure for adding new tests
+2. **Hardware Independence**: Native tests run on any development machine
+3. **Progressive Validation**: Mock → Hardware → Full Integration
+4. **Comprehensive Coverage**: Unit, integration, and protocol-level tests
+5. **CI/CD Ready**: Automated testing in GitHub Actions
+6. **Easy Maintenance**: Clear structure for adding new tests
 
 ## Testing Architecture
 
 ```
 test/
 ├── README.md                 # This file - testing documentation
-├── CMakeLists.txt            # Test build configuration
+├── CMakeLists.txt            # Native test build configuration
 ├── runner/                   # Test execution framework
 │   ├── main.cpp             # Native test runner entry point
 │   ├── test_runner.h        # Test framework utilities
 │   └── config.h             # Test configuration
+├── hardware/                 # 🆕 ESP32-S3 hardware testing framework
+│   ├── README.md            # Hardware testing documentation
+│   ├── QUICK_START.md       # 5-minute setup guide
+│   ├── platformio.ini       # PlatformIO build configuration
+│   ├── CMakeLists.txt       # ESP-IDF build configuration
+│   ├── hardware_test_runner.h/.cpp  # Hardware test framework
+│   ├── test_usb_host_hardware.cpp   # Real USB Host API tests
+│   ├── test_core_systems.cpp        # ESP32-S3 core functionality
+│   ├── test_wifi_hardware.cpp       # WiFi connectivity tests
+│   └── test_integration_hardware.cpp # Hardware integration tests
 ├── mocks/                    # Hardware abstraction layer
 │   ├── mock_esp_system.h/.cpp     # ESP-IDF system mocks
 │   ├── mock_usb_host.h/.cpp       # USB Host API simulation  
@@ -114,7 +142,9 @@ class MockUSBHost : public IUSBHost { /*...*/ };
 
 ## Running Tests
 
-### Prerequisites
+### Native Mock Testing
+
+#### Prerequisites
 
 ```bash
 # Install CMake and a C++ compiler
@@ -128,7 +158,7 @@ sudo apt-get install cmake build-essential
 # Install Visual Studio or MinGW
 ```
 
-### Build and Run
+#### Build and Run
 
 ```bash
 # Build tests
@@ -151,6 +181,30 @@ make
 # Generate coverage report
 make coverage
 ```
+
+### 🆕 ESP32-S3 Hardware Testing
+
+#### Quick Start (5 minutes)
+
+```bash
+# Navigate to hardware tests
+cd test/hardware
+
+# Connect ESP32-S3 board and flash all tests
+pio run --target upload && pio device monitor
+
+# Or run specific test categories
+pio run -e esp32s3_usb_host_tests --target upload && pio device monitor
+pio run -e esp32s3_core_tests --target upload && pio device monitor
+```
+
+**See [`test/hardware/QUICK_START.md`](hardware/QUICK_START.md) for detailed setup instructions.**
+
+#### What Gets Tested
+- **USB Host API**: Real ESP-IDF USB Host library functionality
+- **Core Systems**: GPIO, memory, timing, FreeRTOS tasks
+- **Performance**: Actual hardware benchmarks
+- **Error Handling**: Real hardware error scenarios
 
 ### Continuous Integration
 

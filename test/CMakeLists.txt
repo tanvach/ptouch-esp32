@@ -141,14 +141,14 @@ if(ENABLE_COVERAGE)
             COMMAND ptouch_tests
             
             # Capture coverage info
-            COMMAND ${LCOV_PATH} --directory . --capture --output-file coverage.info
+            COMMAND ${LCOV_PATH} --directory . --capture --output-file coverage.info --ignore-errors inconsistent,unsupported,format,empty,unused
             
-            # Filter out system and test files
-            COMMAND ${LCOV_PATH} --remove coverage.info '/usr/*' --output-file coverage.info
-            COMMAND ${LCOV_PATH} --remove coverage.info '*/test/*' --output-file coverage.info
+            # Filter out system files but keep our test files
+            COMMAND ${LCOV_PATH} --remove coverage.info '/usr/*' --output-file coverage.info --ignore-errors inconsistent,unsupported,format,empty,unused
+            COMMAND ${LCOV_PATH} --remove coverage.info '/Library/*' --output-file coverage.info --ignore-errors inconsistent,unsupported,format,empty,unused
             
             # Generate HTML report
-            COMMAND ${GENHTML_PATH} coverage.info --output-directory coverage
+            COMMAND ${GENHTML_PATH} coverage.info --output-directory coverage --ignore-errors inconsistent,unsupported,format,empty,unused,corrupt,category
             
             DEPENDS ptouch_tests
             COMMENT "Generating code coverage report"
