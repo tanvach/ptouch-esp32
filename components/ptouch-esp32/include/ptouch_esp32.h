@@ -9,6 +9,7 @@
 #include "freertos/queue.h"
 #include "esp_log.h"
 #include "usb/usb_host.h"
+#include "ptouch_debug.h"
 
 // Brother P-touch printer constants
 #define PTOUCH_VID                 0x04F9
@@ -159,6 +160,15 @@ public:
     void setVerbose(bool verbose);
     void listSupportedPrinters();
     static const pt_dev_info* getSupportedDevices();
+    
+    // Debug methods
+    bool enableDebugLogging(ptouch_debug_level_t level = PTOUCH_DEBUG_LEVEL_INFO);
+    bool disableDebugLogging();
+    bool setDebugLevel(ptouch_debug_level_t level);
+    ptouch_debug_level_t getDebugLevel() const;
+    void printDebugStats();
+    void printPacketHistory(size_t count = 10);
+    void resetDebugStats();
     
     // Page control
     bool setPageFlags(pt_page_flags flags);

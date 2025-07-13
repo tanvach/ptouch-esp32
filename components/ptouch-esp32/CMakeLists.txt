@@ -4,6 +4,7 @@ idf_component_register(
         "src/ptouch_printing.cpp"
         "src/ptouch_image.cpp"
         "src/ptouch_utils.cpp"
+        "src/ptouch_debug.c"
     INCLUDE_DIRS
         "include"
     REQUIRES
@@ -14,4 +15,7 @@ idf_component_register(
         "spiffs"
         "freertos"
         "log"
+        "console"
+        "esp_timer"
+        "heap"
 ) 

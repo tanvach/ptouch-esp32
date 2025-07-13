@@ -51,6 +51,9 @@ PtouchPrinter::PtouchPrinter()
       verbose_mode(false), usb_host_installed(false), bulk_out_ep(0), bulk_in_ep(0) {
     status = new ptouch_stat();
     memset(status, 0, sizeof(ptouch_stat));
+    
+    // Initialize debug logger with default level
+    ptouch_debug_init(PTOUCH_DEBUG_LEVEL_INFO);
 }
 
 // Destructor
@@ -60,6 +63,9 @@ PtouchPrinter::~PtouchPrinter() {
         delete status;
         status = nullptr;
     }
+    
+    // Clean up debug logger
+    ptouch_debug_deinit();
 }
 
 // USB Host client event callback
@@ -373,6 +379,9 @@ int PtouchPrinter::usbSend(uint8_t *data, size_t len) {
     transfer->num_bytes = len;
     memcpy(transfer->data_buffer, data, len);
     
+    // Log outgoing packet
+    PTOUCH_DEBUG_LOG_PACKET_OUT(bulk_out_ep, data, len, 0);
+    
     // Submit transfer
     err = usb_host_transfer_submit(transfer);
     if (err != ESP_OK) {
@@ -396,6 +405,8 @@ int PtouchPrinter::usbSend(uint8_t *data, size_t len) {
         }
     } else {
         ESP_LOGE(TAG, "USB transfer failed with status: %d", transfer->status);
+        // Log transfer error
+        PTOUCH_DEBUG_LOG_PACKET_OUT(bulk_out_ep, data, len, transfer->status);
     }
     
     usb_host_transfer_free(transfer);
@@ -446,6 +457,14 @@ int PtouchPrinter::usbReceive(uint8_t *data, size_t len) {
         if (verbose_mode && result > 0) {
             ESP_LOGI(TAG, "Received %d bytes from printer", result);
         }
+        
+        // Log incoming packet
+        if (result > 0) {
+            PTOUCH_DEBUG_LOG_PACKET_IN(bulk_in_ep, transfer->data_buffer, result, 0);
+        }
+    } else {
+        // Log transfer error
+        PTOUCH_DEBUG_LOG_PACKET_IN(bulk_in_ep, nullptr, 0, transfer->status);
     }
     
     usb_host_transfer_free(transfer);
@@ -673,6 +692,35 @@ void PtouchPrinter::listSupportedPrinters() {
                     supported_devices[i].pid);
         }
     }
+}
+
+// Debug methods implementation
+bool PtouchPrinter::enableDebugLogging(ptouch_debug_level_t level) {
+    return ptouch_debug_init(level) == ESP_OK;
+}
+
+bool PtouchPrinter::disableDebugLogging() {
+    return ptouch_debug_deinit() == ESP_OK;
+}
+
+bool PtouchPrinter::setDebugLevel(ptouch_debug_level_t level) {
+    return ptouch_debug_set_level(level) == ESP_OK;
+}
+
+ptouch_debug_level_t PtouchPrinter::getDebugLevel() const {
+    return ptouch_debug_get_level();
+}
+
+void PtouchPrinter::printDebugStats() {
+    ptouch_debug_print_stats();
+}
+
+void PtouchPrinter::printPacketHistory(size_t count) {
+    ptouch_debug_print_packet_history(count);
+}
+
+void PtouchPrinter::resetDebugStats() {
+    ptouch_debug_reset_stats();
 }
 
 // Media type, tape color, and text color string functions
