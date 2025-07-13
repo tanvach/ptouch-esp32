@@ -356,6 +356,28 @@ ptouch-esp32/
 - **❌ Performance Benchmarking**: No measurement of actual print speeds
 - **❌ Error Recovery**: Real-world error scenarios not tested
 
+### **🧪 Automated Testing Framework**
+
+A comprehensive **mock-based testing suite** is available for software validation:
+
+📖 **[Complete Testing Guide](test/TESTING_GUIDE.md)** - Detailed documentation covering:
+- **Test Architecture**: Custom lightweight framework with hardware mocks
+- **Build & Run Instructions**: Step-by-step setup and execution
+- **Test Categories**: 22 tests covering USB Host, protocol, integration scenarios
+- **Mock Capabilities**: Simulated Brother P-touch printers with error injection
+- **Blind Spots**: Honest assessment of what's NOT tested (real hardware, timing, electrical)
+- **Future Roadmap**: Plans for hardware-in-the-loop testing
+
+**Quick Start:**
+```bash
+cd test
+mkdir -p build && cd build
+cmake .. && make
+./ptouch_tests --verbose
+```
+
+**✅ All 22 tests passing** with comprehensive USB Host simulation, protocol validation, and error handling scenarios.
+
 ## 🤝 Contributing
 
 **This project URGENTLY needs hardware testing before any other development work.**
