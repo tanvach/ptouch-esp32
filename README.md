@@ -141,7 +141,7 @@ cd ptouch-esp32
 cp include/config.example.h include/config.h
 ```
 
-### **3. Configure WiFi Credentials**
+### **3. Configure WiFi**
 
 Edit `include/config.h` with your network settings:
 
@@ -150,13 +150,18 @@ Edit `include/config.h` with your network settings:
 const char* WIFI_SSID = "Your_WiFi_Network";
 const char* WIFI_PASSWORD = "Your_WiFi_Password";
 
-// Optional: Custom hostname
-const char* DEVICE_HOSTNAME = "ptouch-printer";
-
-// Optional: Advanced settings
-const bool ENABLE_OTA_UPDATES = true;
+// Web Server Configuration
 const int WEB_SERVER_PORT = 80;
+
+// Printer Configuration
+const bool PRINTER_VERBOSE = true;
+const int PRINTER_STATUS_CHECK_INTERVAL = 5000;  // milliseconds
+
+// WebSocket Configuration
+const int WS_CLEANUP_INTERVAL = 100;  // milliseconds
 ```
+
+**Note**: Copy `include/config.example.h` to `include/config.h` and update with your actual WiFi credentials.
 
 ### **4. Build and Deploy**
 
