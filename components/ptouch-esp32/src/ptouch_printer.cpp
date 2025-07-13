@@ -23,6 +23,7 @@
 
 #include "ptouch_esp32.h"
 #include "esp_log.h"
+#include "config.h"  // Include config for debug options
 
 static const char *TAG = "ptouch-printer";
 
@@ -75,8 +76,16 @@ PtouchPrinter::PtouchPrinter()
     status = new ptouch_stat();
     memset(status, 0, sizeof(ptouch_stat));
     
-    // Initialize debug logger with default level
-    ptouch_debug_init(PTOUCH_DEBUG_LEVEL_INFO);
+    // Initialize debug logger based on config
+    if (ENABLE_USB_DEBUG) {
+        ptouch_debug_init(USB_DEBUG_LEVEL);
+        if (verbose_mode) {
+            ESP_LOGI(TAG, "USB debug logging enabled (level: %d)", USB_DEBUG_LEVEL);
+        }
+    } else {
+        // Initialize with NONE level to minimize overhead
+        ptouch_debug_init(PTOUCH_DEBUG_LEVEL_NONE);
+    }
 }
 
 // Destructor

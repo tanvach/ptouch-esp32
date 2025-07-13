@@ -7,6 +7,7 @@ idf_component_register(
         "src/ptouch_debug.c"
     INCLUDE_DIRS
         "include"
+        "../../include"  # Add project include directory for config.h
     REQUIRES
         "usb"
         "esp_http_server"

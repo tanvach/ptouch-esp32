@@ -38,25 +38,51 @@ All other debug features (logging, statistics, protocol analysis) are fully func
 
 ## Quick Start
 
-### 1. Enable Debug Logging
+### 1. Enable Debug Logging (Easy Method)
 
+**Recommended**: Use configuration file for compile-time debug control:
+
+Edit `include/config.h`:
 ```cpp
-#include "ptouch_esp32.h"
+// WiFi Configuration
+#define WIFI_SSID "Your_WiFi_Network"
+#define WIFI_PASSWORD "Your_WiFi_Password"
 
-PtouchPrinter printer;
-
-void setup() {
-    // Enable debug logging with INFO level
-    printer.enableDebugLogging(PTOUCH_DEBUG_LEVEL_INFO);
-    
-    // Initialize printer
-    if (printer.begin()) {
-        ESP_LOGI("main", "Printer initialized with debug logging");
-    }
-}
+// USB Debug configuration
+#define ENABLE_USB_DEBUG true   // Enable USB packet logging and protocol analysis
+#define USB_DEBUG_LEVEL PTOUCH_DEBUG_LEVEL_INFO  // Set debug level
 ```
 
-### 2. Monitor Serial Output
+Then build and upload:
+```bash
+pio run --target upload
+pio device monitor
+```
+
+### 2. Debug Level Options
+
+**Debug levels available in config.h**:
+- `PTOUCH_DEBUG_LEVEL_NONE` - No debug output (production)
+- `PTOUCH_DEBUG_LEVEL_ERROR` - Only errors (transfer failures, protocol errors)
+- `PTOUCH_DEBUG_LEVEL_WARN` - Warnings + errors (timeouts, unknown commands)
+- `PTOUCH_DEBUG_LEVEL_INFO` - General info (packet summary, command identification) - **Recommended**
+- `PTOUCH_DEBUG_LEVEL_DEBUG` - Detailed logging (hex dumps, timing info)
+- `PTOUCH_DEBUG_LEVEL_VERBOSE` - Everything (very detailed)
+
+**Example config.h setup**:
+```cpp
+// For basic troubleshooting
+#define ENABLE_USB_DEBUG true
+#define USB_DEBUG_LEVEL PTOUCH_DEBUG_LEVEL_INFO
+
+// For detailed protocol analysis
+#define ENABLE_USB_DEBUG true
+#define USB_DEBUG_LEVEL PTOUCH_DEBUG_LEVEL_DEBUG
+```
+
+**💡 Recommendation**: Use `PTOUCH_DEBUG_LEVEL_INFO` for general debugging, `PTOUCH_DEBUG_LEVEL_DEBUG` for detailed analysis.
+
+### 3. Monitor Serial Output
 
 ```bash
 # Open serial monitor

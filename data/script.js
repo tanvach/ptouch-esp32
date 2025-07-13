@@ -33,40 +33,47 @@ class PtouchInterface {
         this.printQueue = [];
         this.canvasHistory = [];
         
-        this.initializeWebSocket();
+        // WebSocket not implemented yet, use HTTP polling
         this.initializeEventListeners();
         this.initializeCanvas();
         this.refreshStatus();
+        
+        // Poll status every 5 seconds
+        setInterval(() => this.refreshStatus(), 5000);
     }
     
-    // WebSocket Management
+    // WebSocket Management (disabled - not implemented in server)
     initializeWebSocket() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        // WebSocket functionality not implemented in server yet
+        console.log('WebSocket functionality disabled - using HTTP polling instead');
+        return;
         
-        this.websocket = new WebSocket(wsUrl);
+        // const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        // const wsUrl = `${protocol}//${window.location.host}/ws`;
         
-        this.websocket.onopen = () => {
-            this.showToast('Connected to printer server', 'success');
-            this.updateConnectionStatus('Connected');
-        };
+        // this.websocket = new WebSocket(wsUrl);
         
-        this.websocket.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            this.handleWebSocketMessage(data);
-        };
+        // this.websocket.onopen = () => {
+        //     this.showToast('Connected to printer server', 'success');
+        //     this.updateConnectionStatus('Connected');
+        // };
         
-        this.websocket.onclose = () => {
-            this.showToast('Connection to server lost', 'error');
-            this.updateConnectionStatus('Disconnected');
-            // Attempt to reconnect after 5 seconds
-            setTimeout(() => this.initializeWebSocket(), 5000);
-        };
+        // this.websocket.onmessage = (event) => {
+        //     const data = JSON.parse(event.data);
+        //     this.handleWebSocketMessage(data);
+        // };
         
-        this.websocket.onerror = (error) => {
-            console.error('WebSocket error:', error);
-            this.showToast('Connection error', 'error');
-        };
+        // this.websocket.onclose = () => {
+        //     this.showToast('Connection to server lost', 'error');
+        //     this.updateConnectionStatus('Disconnected');
+        //     // Attempt to reconnect after 5 seconds
+        //     setTimeout(() => this.initializeWebSocket(), 5000);
+        // };
+        
+        // this.websocket.onerror = (error) => {
+        //     console.error('WebSocket error:', error);
+        //     this.showToast('Connection error', 'error');
+        // };
     }
     
     handleWebSocketMessage(data) {
@@ -391,9 +398,9 @@ class PtouchInterface {
         fetch('/api/print/text', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Type': 'application/json',
             },
-            body: `text=${encodeURIComponent(text)}`
+            body: JSON.stringify({ text: text })
         })
         .then(response => response.text())
         .then(data => {
@@ -417,32 +424,41 @@ class PtouchInterface {
             return;
         }
         
+        // Image printing not yet implemented
+        this.showToast('Image printing not yet implemented', 'warning');
+        return;
+        
+        // TODO: Implement image printing endpoint
         // Convert canvas to image data
-        const imageData = this.designCanvas.toDataURL('image/png');
+        // const imageData = this.designCanvas.toDataURL('image/png');
         
-        this.showLoading(true);
+        // this.showLoading(true);
         
-        fetch('/api/print/image', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: `image=${encodeURIComponent(imageData)}&width=${this.designCanvas.width}&height=${this.designCanvas.height}`
-        })
-        .then(response => response.text())
-        .then(data => {
-            this.showLoading(false);
-            if (data.includes('successfully')) {
-                this.showToast('Print job sent successfully', 'success');
-                this.addToQueue('design', 'Custom design');
-            } else {
-                this.showToast('Print job failed: ' + data, 'error');
-            }
-        })
-        .catch(error => {
-            this.showLoading(false);
-            this.showToast('Error: ' + error.message, 'error');
-        });
+        // fetch('/api/print/image', {
+        //     method: 'POST',
+        //     headers: {
+        //         'Content-Type': 'application/json',
+        //     },
+        //     body: JSON.stringify({ 
+        //         image: imageData,
+        //         width: this.designCanvas.width,
+        //         height: this.designCanvas.height
+        //     })
+        // })
+        // .then(response => response.text())
+        // .then(data => {
+        //     this.showLoading(false);
+        //     if (data.includes('successfully')) {
+        //         this.showToast('Print job sent successfully', 'success');
+        //         this.addToQueue('design', 'Custom design');
+        //     } else {
+        //         this.showToast('Print job failed: ' + data, 'error');
+        //     }
+        // })
+        // .catch(error => {
+        //     this.showLoading(false);
+        //     this.showToast('Error: ' + error.message, 'error');
+        // });
     }
     
     reconnectPrinter() {

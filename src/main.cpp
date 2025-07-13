@@ -38,13 +38,17 @@
 #include "nvs_flash.h"
 #include "lwip/err.h"
 #include "lwip/sys.h"
-#include "ArduinoJson.h"
+#include "cJSON.h"
 
 // Include our P-touch library
 #include "../lib/ptouch-esp32/include/ptouch_esp32.h"
 #include "../include/config.h"
 
 static const char *TAG = "ptouch-server";
+
+// WiFi Configuration - loaded from config.h
+const char* wifi_ssid = WIFI_SSID;
+const char* wifi_password = WIFI_PASSWORD;
 
 // WiFi event group
 #define WIFI_CONNECTED_BIT BIT0
@@ -65,6 +69,11 @@ static char printerName[64] = "Unknown";
 static int printerMaxWidth = 0;
 static int printerTapeWidth = 0;
 static char printerStatus[64] = "Disconnected";
+
+// Configuration constants
+const bool PRINTER_VERBOSE = true;
+const int PRINTER_STATUS_CHECK_INTERVAL = 5000;  // milliseconds
+const int WS_CLEANUP_INTERVAL = 100;  // milliseconds
 
 // Function prototypes
 static void wifi_init_sta(void);
@@ -122,8 +131,8 @@ static void wifi_init_sta(void)
                                                         &instance_got_ip));
 
     wifi_config_t wifi_config = {};
-    strncpy((char*)wifi_config.sta.ssid, WIFI_SSID, sizeof(wifi_config.sta.ssid));
-    strncpy((char*)wifi_config.sta.password, WIFI_PASSWORD, sizeof(wifi_config.sta.password));
+    strncpy((char*)wifi_config.sta.ssid, wifi_ssid, sizeof(wifi_config.sta.ssid));
+    strncpy((char*)wifi_config.sta.password, wifi_password, sizeof(wifi_config.sta.password));
     wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
@@ -139,9 +148,9 @@ static void wifi_init_sta(void)
             portMAX_DELAY);
 
     if (bits & WIFI_CONNECTED_BIT) {
-        ESP_LOGI(TAG, "connected to ap SSID:%s", WIFI_SSID);
+        ESP_LOGI(TAG, "connected to ap SSID:%s", wifi_ssid);
     } else if (bits & WIFI_FAIL_BIT) {
-        ESP_LOGI(TAG, "Failed to connect to SSID:%s", WIFI_SSID);
+        ESP_LOGI(TAG, "Failed to connect to SSID:%s", wifi_ssid);
     } else {
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
     }
@@ -149,54 +158,110 @@ static void wifi_init_sta(void)
 
 // HTTP request handlers
 
-// Root handler - serve simple HTML
+// Root handler - serve web interface
 static esp_err_t root_get_handler(httpd_req_t *req)
 {
-    const char* simple_html = R"(
-<!DOCTYPE html>
-<html><head><title>P-touch ESP32</title></head>
-<body>
-<h1>P-touch ESP32 Label Printer</h1>
-<p>Web interface temporarily disabled. Use API endpoints directly:</p>
-<ul>
-<li>GET /api/status - Printer status</li>
-<li>POST /api/print/text - Print text (JSON: {"text": "your text"})</li>
-<li>POST /api/reconnect - Reconnect printer</li>
-<li>GET /api/printers - List supported printers</li>
-</ul>
-</body></html>
-)";
-
+    FILE *file = fopen("/spiffs/index.html", "r");
+    if (!file) {
+        ESP_LOGE(TAG, "Failed to open index.html");
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to open index.html");
+        return ESP_FAIL;
+    }
+    
     httpd_resp_set_type(req, "text/html");
-    httpd_resp_send(req, simple_html, HTTPD_RESP_USE_STRLEN);
+    
+    char buffer[1024];
+    size_t bytes_read;
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        if (httpd_resp_send_chunk(req, buffer, bytes_read) != ESP_OK) {
+            fclose(file);
+            return ESP_FAIL;
+        }
+    }
+    
+    fclose(file);
+    httpd_resp_send_chunk(req, NULL, 0);  // End chunked response
+    return ESP_OK;
+}
+
+// Style.css handler
+static esp_err_t style_get_handler(httpd_req_t *req)
+{
+    FILE *file = fopen("/spiffs/style.css", "r");
+    if (!file) {
+        ESP_LOGE(TAG, "Failed to open style.css");
+        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "File not found");
+        return ESP_FAIL;
+    }
+    
+    httpd_resp_set_type(req, "text/css");
+    
+    char buffer[1024];
+    size_t bytes_read;
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        if (httpd_resp_send_chunk(req, buffer, bytes_read) != ESP_OK) {
+            fclose(file);
+            return ESP_FAIL;
+        }
+    }
+    
+    fclose(file);
+    httpd_resp_send_chunk(req, NULL, 0);
+    return ESP_OK;
+}
+
+// Script.js handler
+static esp_err_t script_get_handler(httpd_req_t *req)
+{
+    FILE *file = fopen("/spiffs/script.js", "r");
+    if (!file) {
+        ESP_LOGE(TAG, "Failed to open script.js");
+        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "File not found");
+        return ESP_FAIL;
+    }
+    
+    httpd_resp_set_type(req, "application/javascript");
+    
+    char buffer[1024];
+    size_t bytes_read;
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        if (httpd_resp_send_chunk(req, buffer, bytes_read) != ESP_OK) {
+            fclose(file);
+            return ESP_FAIL;
+        }
+    }
+    
+    fclose(file);
+    httpd_resp_send_chunk(req, NULL, 0);
     return ESP_OK;
 }
 
 // API status endpoint
 static esp_err_t api_status_get_handler(httpd_req_t *req)
 {
-    JsonDocument doc;
-    doc["connected"] = printerConnected;
-    doc["name"] = printerName;
-    doc["status"] = printerStatus;
-    doc["maxWidth"] = printerMaxWidth;
-    doc["tapeWidth"] = printerTapeWidth;
+    cJSON *doc = cJSON_CreateObject();
+    cJSON_AddBoolToObject(doc, "connected", printerConnected);
+    cJSON_AddStringToObject(doc, "name", printerName);
+    cJSON_AddStringToObject(doc, "status", printerStatus);
+    cJSON_AddNumberToObject(doc, "maxWidth", printerMaxWidth);
+    cJSON_AddNumberToObject(doc, "tapeWidth", printerTapeWidth);
 
     if (printerConnected && printer) {
-        doc["mediaType"] = printer->getMediaType();
-        doc["tapeColor"] = printer->getTapeColor();
-        doc["textColor"] = printer->getTextColor();
-        doc["hasError"] = printer->hasError();
+        cJSON_AddStringToObject(doc, "mediaType", printer->getMediaType());
+        cJSON_AddStringToObject(doc, "tapeColor", printer->getTapeColor());
+        cJSON_AddStringToObject(doc, "textColor", printer->getTextColor());
+        cJSON_AddBoolToObject(doc, "hasError", printer->hasError());
         if (printer->hasError()) {
-            doc["errorDescription"] = printer->getErrorDescription();
+            cJSON_AddStringToObject(doc, "errorDescription", printer->getErrorDescription());
         }
     }
 
-    std::string response;
-    serializeJson(doc, response);
+    char *response = cJSON_PrintUnformatted(doc);
+    cJSON_Delete(doc);
 
     httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, response.c_str(), response.length());
+    httpd_resp_send(req, response, strlen(response));
+    free(response);
     return ESP_OK;
 }
 
@@ -222,26 +287,28 @@ static esp_err_t api_print_text_post_handler(httpd_req_t *req)
     buf[ret] = '\0';
 
     // Parse JSON
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, buf);
-    if (error) {
+    cJSON *doc = cJSON_Parse(buf);
+    if (!doc) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
         return ESP_FAIL;
     }
 
-    if (!doc["text"].is<const char*>()) {
+    if (!cJSON_HasObjectItem(doc, "text")) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing text parameter");
+        cJSON_Delete(doc);
         return ESP_FAIL;
     }
 
-    const char* text = doc["text"];
+    const char* text = cJSON_GetStringValue(cJSON_GetObjectItem(doc, "text"));
     if (!text || strlen(text) == 0) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty text");
+        cJSON_Delete(doc);
         return ESP_FAIL;
     }
 
     if (!printerConnected || !printer) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Printer not connected");
+        cJSON_Delete(doc);
         return ESP_FAIL;
     }
 
@@ -255,6 +322,7 @@ static esp_err_t api_print_text_post_handler(httpd_req_t *req)
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Print job failed");
     }
 
+    cJSON_Delete(doc);
     return ESP_OK;
 }
 
@@ -275,26 +343,29 @@ static esp_err_t api_reconnect_post_handler(httpd_req_t *req)
 // API list printers endpoint
 static esp_err_t api_printers_get_handler(httpd_req_t *req)
 {
-    JsonDocument doc;
-    JsonArray printers = doc["printers"].to<JsonArray>();
+    cJSON *doc = cJSON_CreateObject();
+    cJSON *printers = cJSON_CreateArray();
+    cJSON_AddItemToObject(doc, "printers", printers);
     
     const pt_dev_info* devices = PtouchPrinter::getSupportedDevices();
     for (int i = 0; devices[i].vid != 0; i++) {
         if (!(devices[i].flags & FLAG_PLITE)) {
-            JsonObject printer = printers.add<JsonObject>();
-            printer["name"] = devices[i].name;
-            printer["vid"] = devices[i].vid;
-            printer["pid"] = devices[i].pid;
-            printer["maxWidth"] = devices[i].max_px;
-            printer["dpi"] = devices[i].dpi;
+            cJSON *printer = cJSON_CreateObject();
+            cJSON_AddStringToObject(printer, "name", devices[i].name);
+            cJSON_AddNumberToObject(printer, "vid", devices[i].vid);
+            cJSON_AddNumberToObject(printer, "pid", devices[i].pid);
+            cJSON_AddNumberToObject(printer, "maxWidth", devices[i].max_px);
+            cJSON_AddNumberToObject(printer, "dpi", devices[i].dpi);
+            cJSON_AddItemToArray(printers, printer);
         }
     }
     
-    std::string response;
-    serializeJson(doc, response);
+    char *response = cJSON_PrintUnformatted(doc);
+    cJSON_Delete(doc);
     
     httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, response.c_str(), response.length());
+    httpd_resp_send(req, response, strlen(response));
+    free(response);
     return ESP_OK;
 }
 
@@ -317,6 +388,23 @@ static esp_err_t start_webserver(void)
             .user_ctx  = NULL
         };
         httpd_register_uri_handler(server, &root);
+        
+        // Static file handlers
+        httpd_uri_t style = {
+            .uri       = "/style.css",
+            .method    = HTTP_GET,
+            .handler   = style_get_handler,
+            .user_ctx  = NULL
+        };
+        httpd_register_uri_handler(server, &style);
+        
+        httpd_uri_t script = {
+            .uri       = "/script.js",
+            .method    = HTTP_GET,
+            .handler   = script_get_handler,
+            .user_ctx  = NULL
+        };
+        httpd_register_uri_handler(server, &script);
 
         // API handlers
         httpd_uri_t api_status = {

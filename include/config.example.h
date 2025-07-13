@@ -1,19 +1,17 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include "ptouch_debug.h"  // For debug level constants
+
 // WiFi Configuration
-// Copy this file to config.h and update with your actual credentials
-const char* WIFI_SSID = "Your_WiFi_SSID";
-const char* WIFI_PASSWORD = "Your_WiFi_Password";
+#define WIFI_SSID "Your_WiFi_SSID"
+#define WIFI_PASSWORD "Your_WiFi_Password"
 
-// Web Server Configuration
-const int WEB_SERVER_PORT = 80;
+// Web server configuration
+#define WEB_SERVER_PORT 80
 
-// Printer Configuration
-const bool PRINTER_VERBOSE = true;
-const int PRINTER_STATUS_CHECK_INTERVAL = 5000;  // milliseconds
-
-// WebSocket Configuration
-const int WS_CLEANUP_INTERVAL = 100;  // milliseconds
+// USB Debug configuration
+#define ENABLE_USB_DEBUG false
+#define USB_DEBUG_LEVEL PTOUCH_DEBUG_LEVEL_INFO  // NONE, ERROR, WARN, INFO, DEBUG, VERBOSE
 
 #endif // CONFIG_H 

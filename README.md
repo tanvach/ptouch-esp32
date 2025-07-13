@@ -141,27 +141,33 @@ cd ptouch-esp32
 cp include/config.example.h include/config.h
 ```
 
-### **3. Configure WiFi**
+### **3. Configure WiFi and Debug**
 
-Edit `include/config.h` with your network settings:
+**Configuration**: Edit the settings in `include/config.h`:
 
 ```cpp
+// Configuration settings in include/config.h
 // WiFi Configuration
-const char* WIFI_SSID = "Your_WiFi_Network";
-const char* WIFI_PASSWORD = "Your_WiFi_Password";
+#define WIFI_SSID "Your_WiFi_Network"      // 🔧 Set your WiFi network name
+#define WIFI_PASSWORD "Your_WiFi_Password"  // 🔧 Set your WiFi password
 
-// Web Server Configuration
-const int WEB_SERVER_PORT = 80;
+// Web server configuration
+#define WEB_SERVER_PORT 80
 
-// Printer Configuration
-const bool PRINTER_VERBOSE = true;
-const int PRINTER_STATUS_CHECK_INTERVAL = 5000;  // milliseconds
-
-// WebSocket Configuration
-const int WS_CLEANUP_INTERVAL = 100;  // milliseconds
+// USB Debug configuration
+#define ENABLE_USB_DEBUG true   // 🔧 Set to true for debugging!
+#define USB_DEBUG_LEVEL PTOUCH_DEBUG_LEVEL_INFO  // Set debug level
 ```
 
-**Note**: Copy `include/config.example.h` to `include/config.h` and update with your actual WiFi credentials.
+**Debug Levels Available**:
+- `PTOUCH_DEBUG_LEVEL_NONE` - No debug output (production)
+- `PTOUCH_DEBUG_LEVEL_ERROR` - Errors only
+- `PTOUCH_DEBUG_LEVEL_WARN` - Warnings + errors
+- `PTOUCH_DEBUG_LEVEL_INFO` - General info (recommended for debugging)
+- `PTOUCH_DEBUG_LEVEL_DEBUG` - Detailed logging with hex dumps
+- `PTOUCH_DEBUG_LEVEL_VERBOSE` - Everything (very detailed)
+
+**Debug Features**: When enabled, you get comprehensive USB packet logging, Brother P-touch protocol analysis, interactive console commands, and performance statistics - perfect for troubleshooting printer communication!
 
 ### **4. Build and Deploy**
 
