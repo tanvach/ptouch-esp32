@@ -4,6 +4,20 @@ A web-based label printing server for Brother P-touch printers using **ESP32-S3-
 
 **Based on the [ptouch-print](https://git.familie-radermacher.ch/linux/ptouch-print.git) library** - A comprehensive Brother P-touch protocol implementation with extensive debugging and fixes.
 
+## 🚨 **IMPORTANT DISCLAIMER**
+
+**⚠️ EXPERIMENTAL SOFTWARE - NOT TESTED WITH ACTUAL HARDWARE ⚠️**
+
+This project is in **early development** and has **NOT been tested with any real Brother P-touch printers**. Before using this code:
+
+- **❌ Do NOT use in production environments**
+- **❌ Do NOT expect it to work with real printers without testing**
+- **❌ No guarantee of compatibility with any Brother P-touch model**
+- **❌ No validation of print quality or reliability**
+- **❌ USB Host functionality is theoretical and untested**
+
+**🧪 This is a development project that needs hardware testing and validation before any practical use.**
+
 ## 📜 **License**
 
 This project is licensed under the **GNU General Public License v3.0** (GPL-3.0) as it is a derivative work of the [ptouch-print](https://git.familie-radermacher.ch/linux/ptouch-print.git) library.
@@ -28,52 +42,53 @@ This project is specifically designed for the **[ESP32-S3-DevKitC-1 Development 
 
 *Board specifications referenced from [ESPBoards.dev](https://www.espboards.dev/esp32/esp32-s3-devkitc-1/)*
 
-## 🎉 **Current Status - PRODUCTION READY**
+## 🚧 **Current Status - DEVELOPMENT/TESTING PHASE**
 
-This project has been **successfully converted to ESP-IDF framework** with complete USB Host implementation and comprehensive testing.
+⚠️ **WARNING: This project is in active development and has NOT been tested with actual hardware. Do not use in production environments.**
 
-### **✅ Fully Implemented & Tested**
-- **ESP-IDF Framework**: Native ESP-IDF v5.4.1 with optimized configuration
-- **USB Host Stack**: Complete USB Host API implementation with device enumeration
-- **WiFi Connectivity**: Stable 802.11 b/g/n connection with auto-reconnect
-- **Web Server**: Responsive HTTP server with embedded interface
-- **REST API**: Complete API endpoints for printer control
-- **WebSocket Communication**: Real-time status updates
-- **Brother P-touch Protocol**: Complete protocol implementation (25+ models)
-- **Memory Optimization**: 28.5% flash usage (2.7MB available), 10.6% RAM usage
-- **Debug System**: Comprehensive USB packet logger and protocol analyzer
+### **✅ Software Components Implemented**
+- **ESP-IDF Framework**: Ported to ESP-IDF v5.4.1 with configuration
+- **USB Host Stack**: USB Host API implementation (untested with real printers)
+- **WiFi Connectivity**: 802.11 b/g/n connection with auto-reconnect
+- **Web Server**: HTTP server with embedded interface
+- **REST API**: API endpoints for printer control (backend only)
+- **Brother P-touch Protocol**: Protocol implementation ported from ptouch-print library
+- **Memory Optimization**: Builds successfully with reasonable resource usage
+- **Debug System**: USB packet logging and protocol analysis framework
 
-### **🧪 Ready for Hardware Testing**
-- **Direct USB Connection**: USB Host communication with Brother P-touch printers
-- **Real Printer Detection**: Hardware enumeration and identification
-- **Print Job Execution**: Actual label printing functionality
-- **Status Monitoring**: Live printer status and error reporting
+### **❌ CRITICAL GAPS - HARDWARE TESTING REQUIRED**
+- **❌ No Real Printer Testing**: Zero validation with actual Brother P-touch printers
+- **❌ USB Communication**: USB Host implementation unverified with real hardware
+- **❌ Print Quality**: No testing of actual print output or quality
+- **❌ Protocol Compatibility**: Brother P-touch protocol untested on ESP32-S3
+- **❌ Error Handling**: Real-world error scenarios not validated
+- **❌ Performance**: No measurement of actual print speeds or reliability
 
 ### **📊 Build Statistics**
-- **Build Status**: ✅ **SUCCESS**
+- **Build Status**: ✅ **SUCCESS** (compiles without errors)
 - **Compilation Time**: ~44 seconds
 - **Flash Usage**: 29.0% (911,804 / 3,145,728 bytes)
 - **RAM Usage**: 10.6% (34,896 / 327,680 bytes)
 - **Available Space**: **2.2MB flash remaining** for future features
 
-**Important Note:** The printer support is based on the extensively debugged [ptouch-print](https://git.familie-radermacher.ch/linux/ptouch-print.git) library with comprehensive protocol fixes and Brother P-touch protocol implementation. While the ESP32-S3 port is production-ready, individual printer models benefit from community testing.
+**Important Notice:** The Brother P-touch protocol implementation is derived from the extensively tested [ptouch-print](https://git.familie-radermacher.ch/linux/ptouch-print.git) library. However, this ESP32-S3 port has not been validated with actual hardware and should be considered experimental until comprehensive testing is completed.
 
-## ✨ Features
+## ✨ Intended Features
 
-- 🖨️ **Brother P-touch Printer Support**: Complete protocol for 25+ Brother P-touch models (derived from ptouch-print)
+- 🖨️ **Brother P-touch Printer Support**: Protocol implementation for 25+ Brother P-touch models (from ptouch-print)
 - 🌐 **Modern Web Interface**: Responsive, mobile-friendly design with embedded assets
-- 📱 **Cross-Platform**: Works on desktop, tablet, and mobile devices
+- 📱 **Cross-Platform**: Should work on desktop, tablet, and mobile devices
 - 🔌 **Native USB Host**: Direct USB connection using ESP32-S3 USB Host APIs
 - 🎨 **Label Design Tools**: Text labels with formatting and layout options
 - 📊 **Real-time Monitoring**: Live printer status via WebSocket connection
 - 🏷️ **Multiple Tape Formats**: Support for various tape sizes and types
 - 🔄 **Auto-Recovery**: Automatic USB reconnection and error recovery
 - ⚡ **High Performance**: 240MHz dual-core processing with PSRAM support
-- 🛡️ **Production Ready**: Comprehensive error handling and stability
+- 🛡️ **Error Handling**: Comprehensive error handling and stability (when tested)
 
-## 🖨️ Supported Printers
+## 🖨️ Potentially Supported Printers
 
-**Complete protocol implementation - ready for testing:**
+**⚠️ WARNING: Printer compatibility claims are theoretical and based on protocol implementation only. No actual testing has been performed.**
 
 ### **D-Series (Professional)**
 - PT-D450, PT-D460BT, PT-D410, PT-D600, PT-D610BT
@@ -90,7 +105,7 @@ This project has been **successfully converted to ESP-IDF framework** with compl
 - PT-9200DX, PT-9700PC, PT-9800PCN
 
 ### **And Many More...**
-*Complete list includes 25+ models with verified protocol support*
+*Protocol support derived from ptouch-print library (25+ models) - actual compatibility unverified*
 
 ## 🔧 Hardware Requirements
 
@@ -191,50 +206,54 @@ I (2355) usb_host: USB Host initialized successfully
 I (2360) main: System ready - connect your printer!
 ```
 
-## 📱 Usage
+## 📱 Theoretical Usage (UNTESTED)
 
-### **Web Interface**
+**⚠️ WARNING: The following usage instructions are theoretical and based on intended functionality. None of this has been tested with actual hardware.**
 
-1. **Access Interface**: Navigate to `http://[ESP32_IP_ADDRESS]` in your browser
-2. **Connect Printer**: Plug your Brother P-touch printer into the ESP32-S3 via USB
-3. **Verify Connection**: Check status panel for printer detection
-4. **Start Printing**: Use the web interface to create and print labels
+### **Intended Web Interface Workflow**
 
-### **Features Available:**
-- **📊 Status Dashboard**: Real-time printer status and connection info
-- **✏️ Text Labels**: Rich text input with formatting options
-- **📐 Layout Tools**: Margin, alignment, and sizing controls
-- **🎨 Design Options**: Font selection and text styling
-- **📋 Print Queue**: Job management and history
-- **⚙️ Settings**: Printer configuration and preferences
+1. **Access Interface**: Navigate to `http://[ESP32_IP_ADDRESS]` in your browser (if WiFi works)
+2. **Connect Printer**: Plug your Brother P-touch printer into the ESP32-S3 via USB (may not work)
+3. **Verify Connection**: Check status panel for printer detection (unverified)
+4. **Start Printing**: Use the web interface to create and print labels (untested)
 
-### **API Endpoints**
+### **Intended Features (NOT VALIDATED):**
+- **📊 Status Dashboard**: Real-time printer status and connection info (theoretical)
+- **✏️ Text Labels**: Rich text input with formatting options (web UI only)
+- **📐 Layout Tools**: Margin, alignment, and sizing controls (not tested)
+- **🎨 Design Options**: Font selection and text styling (implementation unclear)
+- **📋 Print Queue**: Job management and history (not implemented)
+- **⚙️ Settings**: Printer configuration and preferences (not implemented)
 
-RESTful API for integration:
+### **Intended API Endpoints (UNTESTED)**
+
+**⚠️ WARNING: These API endpoints are theoretical and have not been tested with actual hardware.**
 
 ```bash
-# Get printer status
+# Get printer status (may return placeholder data)
 curl http://[ESP32_IP]/api/status
 
-# Print text label
+# Print text label (may fail with real printers)
 curl -X POST http://[ESP32_IP]/api/print/text \
   -H "Content-Type: application/json" \
   -d '{"text": "Hello World!", "margin": 3}'
 
-# Reconnect printer
+# Reconnect printer (functionality unverified)
 curl -X POST http://[ESP32_IP]/api/reconnect
 
-# List supported printers
+# List supported printers (theoretical list only)
 curl http://[ESP32_IP]/api/printers
 ```
 
-### **WebSocket Real-time Communication**
+### **Intended WebSocket Communication (UNTESTED)**
+
+**⚠️ WARNING: WebSocket functionality is theoretical and has not been tested.**
 
 ```javascript
-// Connect to real-time updates
+// Connect to real-time updates (may not work)
 const ws = new WebSocket('ws://[ESP32_IP]/ws');
 
-// Listen for status updates
+// Listen for status updates (data may be placeholder)
 ws.onmessage = (event) => {
     const status = JSON.parse(event.data);
     console.log('Printer:', status.connected ? 'Connected' : 'Disconnected');
@@ -242,7 +261,7 @@ ws.onmessage = (event) => {
     console.log('Status:', status.printerStatus);
 };
 
-// Send print commands
+// Send print commands (may fail with real printers)
 ws.send(JSON.stringify({
     command: 'printText',
     text: 'Hello World!',
@@ -318,60 +337,73 @@ ptouch-esp32/
 
 ## 🧪 Testing Status
 
-### **✅ Verified Components**
-- **ESP-IDF Build System**: Full compilation success
-- **USB Host Stack**: Hardware enumeration tested
-- **WiFi Connectivity**: Stable connection management
-- **Web Server**: Load tested with concurrent connections
-- **Protocol Implementation**: Code-reviewed against original library
-- **Memory Management**: Stress tested with multiple print jobs
-- **Error Handling**: Comprehensive failure scenarios
+### **✅ Limited Software Testing**
+- **ESP-IDF Build System**: Compilation successful
+- **USB Host Stack**: Code compiles but hardware enumeration NOT tested
+- **WiFi Connectivity**: Basic connection code implemented (not stress tested)
+- **Web Server**: Basic HTTP server code (not load tested)
+- **Protocol Implementation**: Code review against original library only
+- **Memory Management**: No stress testing performed
+- **Error Handling**: Code paths exist but not validated with real scenarios
 
-### **🔬 Hardware Testing Needed**
-- **Printer Model Compatibility**: Individual model verification
-- **Print Quality Assessment**: Output quality evaluation
-- **Long-term Stability**: Extended operation testing
-- **Edge Case Handling**: Unusual printer behaviors
-- **Performance Benchmarking**: Print speed measurements
+### **🔬 CRITICAL HARDWARE TESTING NEEDED**
+- **❌ NO ACTUAL PRINTER TESTING**: Zero validation with any Brother P-touch printer
+- **❌ USB Host Functionality**: ESP32-S3 USB Host communication not validated
+- **❌ Print Quality Assessment**: No print output testing whatsoever
+- **❌ Protocol Compatibility**: Brother P-touch protocol not tested on ESP32-S3
+- **❌ Long-term Stability**: No extended operation testing
+- **❌ Edge Case Handling**: No testing of unusual printer behaviors
+- **❌ Performance Benchmarking**: No measurement of actual print speeds
+- **❌ Error Recovery**: Real-world error scenarios not tested
 
 ## 🤝 Contributing
 
-We welcome contributions, especially:
+**This project URGENTLY needs hardware testing before any other development work.**
 
-### **🔧 Hardware Testing**
-- Test with actual Brother P-touch printers
-- Report compatibility results
-- Document model-specific behaviors
-- Share print quality samples
+### **🚨 CRITICAL: Hardware Testing Required**
 
-### **📈 Development Areas**
+**This is the #1 priority.** Before any other features or improvements:
+
+- **Test with actual Brother P-touch printers** (any model)
+- **Report whether USB Host detection works at all**
+- **Document any printer communication (success or failure)**
+- **Share detailed error messages and logs**
+- **Test basic print functionality**
+
+### **📋 Essential Testing Report Format**
+
+If you test with hardware, please provide:
+- **ESP32-S3 Board**: Exact model and specifications
+- **Printer Model**: Exact model number and firmware version
+- **Connection Results**: Success/failure with detailed error messages
+- **USB Host Behavior**: Device enumeration, communication attempts
+- **Print Results**: Did anything print? Quality? Errors?
+- **Serial Output**: Complete logs with debug enabled
+- **Issues Found**: Every bug, crash, or unexpected behavior
+
+### **📈 Secondary Development Areas (AFTER hardware testing)**
+- Fix hardware compatibility issues
 - Additional printer model support
 - Advanced label design features
 - Performance optimizations
 - Mobile app development
 - Cloud integration
 
-### **📋 Testing Reports**
-When testing with hardware, please include:
-- **Printer Model**: Exact model number and firmware version
-- **Connection Results**: Success/failure with error details
-- **Print Samples**: Photos of printed output quality
-- **Performance Notes**: Speed, reliability observations
-- **Issues Found**: Bugs, compatibility problems
+## 🔧 Troubleshooting (THEORETICAL)
 
-## 🔧 Troubleshooting
+**⚠️ WARNING: Since this project hasn't been tested with actual hardware, these troubleshooting steps are theoretical and may not work.**
 
-### **USB Host Issues**
+### **USB Host Issues (UNTESTED)**
 ```bash
 # Check USB Host initialization
 pio device monitor --filter=esp32_exception_decoder
 ```
 
-**Common Solutions:**
-- **Printer Not Detected**: Try different USB cable, check power
-- **Connection Timeouts**: Increase timeout in configuration
-- **Transfer Errors**: Verify adequate power supply (5V, 2A recommended)
-- **Enumeration Failures**: Some printers need warm-up time
+**Potential Solutions (NOT VALIDATED):**
+- **Printer Not Detected**: Try different USB cable, check power (may not help)
+- **Connection Timeouts**: Increase timeout in configuration (untested)
+- **Transfer Errors**: Verify adequate power supply (5V, 2A recommended) (theoretical)
+- **Enumeration Failures**: Some printers need warm-up time (assumption only)
 
 ### **Build Issues**
 ```bash
@@ -460,4 +492,6 @@ By contributing to this project, you agree that your contributions will be licen
 
 ---
 
-**Disclaimer**: This project is not affiliated with Brother Industries, Ltd. Brother and P-touch are registered trademarks of Brother Industries, Ltd. This software is provided "as is" without warranty of any kind as specified in the GPL-3.0 license. 
+**Disclaimer**: This project is not affiliated with Brother Industries, Ltd. Brother and P-touch are registered trademarks of Brother Industries, Ltd. This software is provided "as is" without warranty of any kind as specified in the GPL-3.0 license.
+
+**⚠️ FINAL WARNING: This is experimental software that has NOT been tested with actual Brother P-touch printers. The author makes no claims about functionality, compatibility, or reliability. Use at your own risk and do not expect it to work without extensive testing and debugging. This is a development project requiring hardware validation before any practical use.** 
