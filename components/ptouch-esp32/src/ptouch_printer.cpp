@@ -675,7 +675,351 @@ void PtouchPrinter::listSupportedPrinters() {
     }
 }
 
-// Note: Media type, tape color, and text color functions are implemented in ptouch_utils.cpp
+// Media type, tape color, and text color string functions
 
-// Note: Page control methods (setPageFlags, feedPaper, cutPaper, finalizePrint) 
-// are implemented in ptouch_printing.cpp 
+// Get media type string
+const char* PtouchPrinter::getMediaType() const {
+    if (!status) return "Unknown";
+    
+    switch (status->media_type) {
+        case 0x00: return "No media";
+        case 0x01: return "Laminated tape";
+        case 0x03: return "Non-laminated tape";
+        case 0x04: return "Fabric tape";
+        case 0x11: return "Heat-shrink tube";
+        case 0x13: return "Fle tape";
+        case 0x14: return "Flexible ID tape";
+        case 0x15: return "Satin tape";
+        case 0xff: return "Incompatible tape";
+        default: return "Unknown";
+    }
+}
+
+// Get tape color string
+const char* PtouchPrinter::getTapeColor() const {
+    if (!status) return "Unknown";
+    
+    switch (status->tape_color) {
+        case 0x01: return "White";
+        case 0x02: return "Other";
+        case 0x03: return "Clear";
+        case 0x04: return "Red";
+        case 0x05: return "Blue";
+        case 0x06: return "Yellow";
+        case 0x07: return "Green";
+        case 0x08: return "Black";
+        case 0x09: return "Clear";
+        case 0x20: return "Matte White";
+        case 0x21: return "Matte Clear";
+        case 0x22: return "Matte Silver";
+        case 0x23: return "Satin Gold";
+        case 0x24: return "Satin Silver";
+        case 0x30: return "Blue (TZe-5[345]5)";
+        case 0x31: return "Red (TZe-435)";
+        case 0x40: return "Fluorescent Orange";
+        case 0x41: return "Fluorescent Yellow";
+        case 0x50: return "Berry Pink (TZe-MQP35)";
+        case 0x51: return "Light Gray (TZe-MQL35)";
+        case 0x52: return "Lime Green (TZe-MQG35)";
+        case 0x60: return "Yellow (TZe-FX611)";
+        case 0x61: return "White (TZe-FX611)";
+        case 0x62: return "Clear (TZe-FX611)";
+        default: return "Unknown";
+    }
+}
+
+// Get text color string
+const char* PtouchPrinter::getTextColor() const {
+    if (!status) return "Unknown";
+    
+    switch (status->text_color) {
+        case 0x01: return "White";
+        case 0x02: return "Other";
+        case 0x03: return "Clear";
+        case 0x04: return "Red";
+        case 0x05: return "Blue";
+        case 0x06: return "Yellow";
+        case 0x07: return "Green";
+        case 0x08: return "Black";
+        case 0x09: return "Clear";
+        case 0x20: return "Matte White";
+        case 0x21: return "Matte Clear";
+        case 0x22: return "Matte Silver";
+        case 0x23: return "Satin Gold";
+        case 0x24: return "Satin Silver";
+        case 0x30: return "Blue";
+        case 0x31: return "Red";
+        case 0x40: return "Fluorescent Orange";
+        case 0x41: return "Fluorescent Yellow";
+        case 0x50: return "Berry Pink";
+        case 0x51: return "Light Gray";
+        case 0x52: return "Lime Green";
+        case 0x60: return "Yellow";
+        case 0x61: return "White";
+        case 0x62: return "Clear";
+        default: return "Unknown";
+    }
+}
+
+// Page control methods implementation
+
+// Finalize print job - send eject or chain command
+bool PtouchPrinter::finalizePrint(bool chain) {
+    if (!is_connected) return false;
+    
+    uint8_t cmd_eject[] = {0x1a};  // Print command with feeding
+    uint8_t cmd_chain[] = {0x0c};  // Print command (no cut)
+    
+    // D460BT devices use a leading packet to indicate chaining instead
+    uint8_t *cmd = (chain && (!(device_info->flags & FLAG_D460BT_MAGIC))) ? cmd_chain : cmd_eject;
+    
+    return (usbSend(cmd, 1) > 0);
+}
+
+// Set page flags for printing
+bool PtouchPrinter::setPageFlags(pt_page_flags flags) {
+    if (!is_connected) return false;
+    
+    uint8_t cmd[] = {0x1b, 0x69, 0x4d, (uint8_t)flags};
+    return (usbSend(cmd, sizeof(cmd)) > 0);
+}
+
+// Feed paper (line feed)
+bool PtouchPrinter::feedPaper(int amount) {
+    if (!is_connected) return false;
+    
+    // Send line feed command for specified amount
+    for (int i = 0; i < amount; i++) {
+        uint8_t cmd[] = {0x5a};  // Line feed command
+        if (usbSend(cmd, sizeof(cmd)) < 0) return false;
+    }
+    return true;
+}
+
+// Cut paper (form feed)
+bool PtouchPrinter::cutPaper() {
+    if (!is_connected) return false;
+    
+    uint8_t cmd[] = {0x0c};  // Form feed command
+    return (usbSend(cmd, sizeof(cmd)) > 0);
+}
+
+// Print methods implementation
+
+// Print bitmap data
+bool PtouchPrinter::printBitmap(const uint8_t *bitmap, int width, int height, bool chain) {
+    if (!is_connected || !bitmap || width <= 0 || height <= 0) {
+        ESP_LOGE(TAG, "Invalid print parameters");
+        return false;
+    }
+    
+    // Check if width exceeds printer capabilities
+    if (width > device_info->max_px) {
+        ESP_LOGE(TAG, "Image width (%d) exceeds printer max width (%d)", width, device_info->max_px);
+        return false;
+    }
+    
+    // Get printer status first
+    if (!getStatus()) {
+        ESP_LOGE(TAG, "Failed to get printer status");
+        return false;
+    }
+    
+    // Check for errors
+    if (hasError()) {
+        ESP_LOGE(TAG, "Printer error: %s", getErrorDescription());
+        return false;
+    }
+    
+    // Send D460BT magic commands if needed
+    if (device_info->flags & FLAG_D460BT_MAGIC) {
+        if (chain) {
+            // Send chain command first
+            uint8_t chain_cmd[] = {0x1b, 0x69, 0x4b, 0x00};
+            if (usbSend(chain_cmd, sizeof(chain_cmd)) < 0) {
+                ESP_LOGE(TAG, "Failed to send D460BT chain command");
+                return false;
+            }
+        }
+        
+        // Send magic commands
+        if (sendMagicCommands() != 0) {
+            ESP_LOGE(TAG, "Failed to send D460BT magic commands");
+            return false;
+        }
+    }
+    
+    // Enable PackBits compression if supported
+    if (device_info->flags & FLAG_RASTER_PACKBITS) {
+        if (enablePackBits() != 0) {
+            ESP_LOGE(TAG, "Failed to enable PackBits compression");
+            return false;
+        }
+    }
+    
+    // Send info command for newer printers
+    if (device_info->flags & FLAG_USE_INFO_CMD) {
+        if (sendInfoCommand(height) != 0) {
+            ESP_LOGE(TAG, "Failed to send info command");
+            return false;
+        }
+    }
+    
+    // Start raster mode
+    if (rasterStart() != 0) {
+        ESP_LOGE(TAG, "Failed to start raster mode");
+        return false;
+    }
+    
+    // Calculate bytes per line
+    int bytes_per_line = (width + 7) / 8;
+    
+    if (verbose_mode) {
+        ESP_LOGI(TAG, "Printing bitmap: %dx%d, %d bytes per line", width, height, bytes_per_line);
+    }
+    
+    // Send each raster line
+    for (int y = 0; y < height; y++) {
+        const uint8_t *line_data = bitmap + (y * bytes_per_line);
+        
+        if (sendRasterLine((uint8_t*)line_data, bytes_per_line) != 0) {
+            ESP_LOGE(TAG, "Failed to send raster line %d", y);
+            return false;
+        }
+    }
+    
+    // Finalize the print
+    if (!finalizePrint(chain)) {
+        ESP_LOGE(TAG, "Failed to finalize print");
+        return false;
+    }
+    
+    if (verbose_mode) {
+        ESP_LOGI(TAG, "Print completed successfully");
+    }
+    
+    return true;
+}
+
+// Print image data (wrapper for bitmap)
+bool PtouchPrinter::printImage(const uint8_t *imageData, int width, int height, bool chain) {
+    return printBitmap(imageData, width, height, chain);
+}
+
+// Print text (basic implementation)
+bool PtouchPrinter::printText(const char *text, int fontSize, bool chain) {
+    if (!text || strlen(text) == 0) {
+        ESP_LOGE(TAG, "Invalid text parameter");
+        return false;
+    }
+    
+    // This is a basic implementation - in a full implementation, you would:
+    // 1. Render text to bitmap using a font
+    // 2. Call printBitmap with the rendered bitmap
+    
+    // For now, we'll create a simple placeholder bitmap
+    int text_len = strlen(text);
+    int bitmap_width = text_len * 8;  // 8 pixels per character
+    int bitmap_height = 16;           // 16 pixels high
+    int bytes_per_line = (bitmap_width + 7) / 8;
+    
+    // Create bitmap buffer
+    uint8_t *bitmap = new uint8_t[bytes_per_line * bitmap_height];
+    memset(bitmap, 0, bytes_per_line * bitmap_height);
+    
+    // Simple text rendering (placeholder)
+    for (int i = 0; i < text_len; i++) {
+        // Set some pixels to represent the character
+        for (int y = 4; y < 12; y++) {
+            for (int x = 0; x < 6; x++) {
+                int pixel_pos = i * 8 + x;
+                if (pixel_pos < bitmap_width) {
+                    int byte_pos = y * bytes_per_line + pixel_pos / 8;
+                    int bit_pos = 7 - (pixel_pos % 8);
+                    bitmap[byte_pos] |= (1 << bit_pos);
+                }
+            }
+        }
+    }
+    
+    bool result = printBitmap(bitmap, bitmap_width, bitmap_height, chain);
+    delete[] bitmap;
+    
+    return result;
+}
+
+// Global utility functions for media/tape/text colors
+const char* pt_mediatype_string(uint8_t media_type) {
+    switch (media_type) {
+        case 0x00: return "No media";
+        case 0x01: return "Laminated tape";
+        case 0x03: return "Non-laminated tape";
+        case 0x04: return "Fabric tape";
+        case 0x11: return "Heat-shrink tube";
+        case 0x13: return "Fle tape";
+        case 0x14: return "Flexible ID tape";
+        case 0x15: return "Satin tape";
+        case 0xff: return "Incompatible tape";
+        default: return "Unknown";
+    }
+}
+
+const char* pt_tapecolor_string(uint8_t tape_color) {
+    switch (tape_color) {
+        case 0x01: return "White";
+        case 0x02: return "Other";
+        case 0x03: return "Clear";
+        case 0x04: return "Red";
+        case 0x05: return "Blue";
+        case 0x06: return "Yellow";
+        case 0x07: return "Green";
+        case 0x08: return "Black";
+        case 0x09: return "Clear";
+        case 0x20: return "Matte White";
+        case 0x21: return "Matte Clear";
+        case 0x22: return "Matte Silver";
+        case 0x23: return "Satin Gold";
+        case 0x24: return "Satin Silver";
+        case 0x30: return "Blue (TZe-5[345]5)";
+        case 0x31: return "Red (TZe-435)";
+        case 0x40: return "Fluorescent Orange";
+        case 0x41: return "Fluorescent Yellow";
+        case 0x50: return "Berry Pink (TZe-MQP35)";
+        case 0x51: return "Light Gray (TZe-MQL35)";
+        case 0x52: return "Lime Green (TZe-MQG35)";
+        case 0x60: return "Yellow (TZe-FX611)";
+        case 0x61: return "White (TZe-FX611)";
+        case 0x62: return "Clear (TZe-FX611)";
+        default: return "Unknown";
+    }
+}
+
+const char* pt_textcolor_string(uint8_t text_color) {
+    switch (text_color) {
+        case 0x01: return "White";
+        case 0x02: return "Other";
+        case 0x03: return "Clear";
+        case 0x04: return "Red";
+        case 0x05: return "Blue";
+        case 0x06: return "Yellow";
+        case 0x07: return "Green";
+        case 0x08: return "Black";
+        case 0x09: return "Clear";
+        case 0x20: return "Matte White";
+        case 0x21: return "Matte Clear";
+        case 0x22: return "Matte Silver";
+        case 0x23: return "Satin Gold";
+        case 0x24: return "Satin Silver";
+        case 0x30: return "Blue";
+        case 0x31: return "Red";
+        case 0x40: return "Fluorescent Orange";
+        case 0x41: return "Fluorescent Yellow";
+        case 0x50: return "Berry Pink";
+        case 0x51: return "Light Gray";
+        case 0x52: return "Lime Green";
+        case 0x60: return "Yellow";
+        case 0x61: return "White";
+        case 0x62: return "Clear";
+        default: return "Unknown";
+    }
+} 
