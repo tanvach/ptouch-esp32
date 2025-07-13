@@ -1,381 +1,488 @@
-#include <Arduino.h>
-#include <WiFi.h>
-#include <AsyncTCP.h>
-#include <ESPAsyncWebServer.h>
-#include <ArduinoJson.h>
-#include <SPIFFS.h>
-#include "ptouch_esp32.h"
-#include "config.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <inttypes.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
+#include "esp_system.h"
+#include "esp_wifi.h"
+#include "esp_event.h"
+#include "esp_log.h"
+#include "esp_netif.h"
+#include "esp_http_server.h"
+#include "esp_spiffs.h"
+#include "nvs_flash.h"
+#include "lwip/err.h"
+#include "lwip/sys.h"
+#include "ArduinoJson.h"
 
-// Web server
-AsyncWebServer server(WEB_SERVER_PORT);
-AsyncWebSocket ws("/ws");
+// Include our P-touch library
+#include "../lib/ptouch-esp32/include/ptouch_esp32.h"
+#include "../include/config.h"
+
+static const char *TAG = "ptouch-server";
+
+// WiFi event group
+#define WIFI_CONNECTED_BIT BIT0
+#define WIFI_FAIL_BIT      BIT1
+static EventGroupHandle_t s_wifi_event_group;
+static int s_retry_num = 0;
+#define ESP_MAXIMUM_RETRY  5
+
+// HTTP server handle
+static httpd_handle_t server = NULL;
 
 // P-touch printer instance
-PtouchPrinter printer;
+static PtouchPrinter *printer = nullptr;
 
-// Global variables
-bool printerConnected = false;
-String printerName = "Unknown";
-int printerMaxWidth = 0;
-int printerTapeWidth = 0;
-String printerStatus = "Disconnected";
+// Global variables for printer status
+static bool printerConnected = false;
+static char printerName[64] = "Unknown";
+static int printerMaxWidth = 0;
+static int printerTapeWidth = 0;
+static char printerStatus[64] = "Disconnected";
 
 // Function prototypes
-void initWiFi();
-void initSPIFFS();
-void initWebServer();
-void initPrinter();
-void handleWebSocketMessage(void *arg, uint8_t *data, size_t len);
-void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len);
-void broadcastPrinterStatus();
-void checkPrinterStatus();
-String processorPlaceholder(const String& var);
+static void wifi_init_sta(void);
+static esp_err_t start_webserver(void);
+static void stop_webserver(void);
+static void init_printer(void);
+static void printer_status_task(void *pvParameters);
 
-void setup() {
-    Serial.begin(115200);
-    Serial.println("Starting P-touch ESP32 Server...");
-    
-    // Initialize SPIFFS
-    initSPIFFS();
-    
-    // Initialize WiFi
-    initWiFi();
-    
-    // Initialize printer
-    initPrinter();
-    
-    // Initialize web server
-    initWebServer();
-    
-    Serial.println("Setup complete!");
-    Serial.print("Web interface: http://");
-    Serial.println(WiFi.localIP());
-}
-
-void loop() {
-    // Check printer status periodically
-    static unsigned long lastCheck = 0;
-    if (millis() - lastCheck > PRINTER_STATUS_CHECK_INTERVAL) {
-        checkPrinterStatus();
-        lastCheck = millis();
-    }
-    
-    // Clean up WebSocket clients
-    ws.cleanupClients();
-    
-    delay(WS_CLEANUP_INTERVAL);
-}
-
-void initWiFi() {
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    
-    Serial.print("Connecting to WiFi");
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(1000);
-        Serial.print(".");
-    }
-    
-    Serial.println();
-    Serial.print("Connected! IP address: ");
-    Serial.println(WiFi.localIP());
-}
-
-void initSPIFFS() {
-    if (!SPIFFS.begin(true)) {
-        Serial.println("Failed to mount SPIFFS");
-        return;
-    }
-    Serial.println("SPIFFS mounted successfully");
-}
-
-void initPrinter() {
-    Serial.println("Initializing P-touch printer...");
-    
-    printer.setVerbose(PRINTER_VERBOSE);
-    
-    if (printer.begin()) {
-        Serial.println("USB Host initialized");
-        
-        if (printer.detectPrinter()) {
-            if (printer.connect()) {
-                printerConnected = true;
-                printerName = printer.getPrinterName();
-                printerMaxWidth = printer.getMaxWidth();
-                printerTapeWidth = printer.getTapeWidth();
-                printerStatus = "Connected";
-                
-                Serial.printf("Printer connected: %s\n", printerName.c_str());
-                Serial.printf("Max width: %d px, Tape width: %d px\n", printerMaxWidth, printerTapeWidth);
-            } else {
-                printerStatus = "Connection failed";
-                Serial.println("Failed to connect to printer");
-            }
+// WiFi event handler
+static void event_handler(void* arg, esp_event_base_t event_base,
+                          int32_t event_id, void* event_data)
+{
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        esp_wifi_connect();
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        if (s_retry_num < ESP_MAXIMUM_RETRY) {
+            esp_wifi_connect();
+            s_retry_num++;
+            ESP_LOGI(TAG, "retry to connect to the AP");
         } else {
-            printerStatus = "Not detected";
-            Serial.println("No printer detected");
+            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         }
+        ESP_LOGI(TAG,"connect to the AP fail");
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+        ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
+        s_retry_num = 0;
+        xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+    }
+}
+
+// WiFi initialization
+static void wifi_init_sta(void)
+{
+    s_wifi_event_group = xEventGroupCreate();
+
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_netif_create_default_wifi_sta();
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    esp_event_handler_instance_t instance_any_id;
+    esp_event_handler_instance_t instance_got_ip;
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
+                                                        ESP_EVENT_ANY_ID,
+                                                        &event_handler,
+                                                        NULL,
+                                                        &instance_any_id));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
+                                                        IP_EVENT_STA_GOT_IP,
+                                                        &event_handler,
+                                                        NULL,
+                                                        &instance_got_ip));
+
+    wifi_config_t wifi_config = {};
+    strncpy((char*)wifi_config.sta.ssid, WIFI_SSID, sizeof(wifi_config.sta.ssid));
+    strncpy((char*)wifi_config.sta.password, WIFI_PASSWORD, sizeof(wifi_config.sta.password));
+    wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_start());
+
+    ESP_LOGI(TAG, "wifi_init_sta finished.");
+
+    // Wait for connection
+    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
+            WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
+            pdFALSE,
+            pdFALSE,
+            portMAX_DELAY);
+
+    if (bits & WIFI_CONNECTED_BIT) {
+        ESP_LOGI(TAG, "connected to ap SSID:%s", WIFI_SSID);
+    } else if (bits & WIFI_FAIL_BIT) {
+        ESP_LOGI(TAG, "Failed to connect to SSID:%s", WIFI_SSID);
     } else {
-        printerStatus = "USB Host init failed";
-        Serial.println("Failed to initialize USB Host");
+        ESP_LOGE(TAG, "UNEXPECTED EVENT");
     }
 }
 
-void initWebServer() {
-    // WebSocket handler
-    ws.onEvent(onWsEvent);
-    server.addHandler(&ws);
-    
-    // Serve static files from SPIFFS
-    server.serveStatic("/", SPIFFS, "/").setDefaultFile("index.html").setTemplateProcessor(processorPlaceholder);
-    
-    // API endpoint - Get printer status
-    server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request){
-        DynamicJsonDocument doc(1024);
-        doc["connected"] = printerConnected;
-        doc["name"] = printerName;
-        doc["status"] = printerStatus;
-        doc["maxWidth"] = printerMaxWidth;
-        doc["tapeWidth"] = printerTapeWidth;
-        
-        if (printerConnected) {
-            doc["mediaType"] = printer.getMediaType();
-            doc["tapeColor"] = printer.getTapeColor();
-            doc["textColor"] = printer.getTextColor();
-            doc["hasError"] = printer.hasError();
-            if (printer.hasError()) {
-                doc["errorDescription"] = printer.getErrorDescription();
-            }
-        }
-        
-        String response;
-        serializeJson(doc, response);
-        request->send(200, "application/json", response);
-    });
-    
-    // API endpoint - Print text
-    server.on("/api/print/text", HTTP_POST, [](AsyncWebServerRequest *request){
-        if (!printerConnected) {
-            request->send(400, "text/plain", "Printer not connected");
-            return;
-        }
-        
-        if (!request->hasParam("text", true)) {
-            request->send(400, "text/plain", "Missing text parameter");
-            return;
-        }
-        
-        String text = request->getParam("text", true)->value();
-        if (text.length() == 0) {
-            request->send(400, "text/plain", "Empty text");
-            return;
-        }
-        
-        Serial.printf("Printing text: %s\n", text.c_str());
-        
-        bool success = printer.printText(text.c_str());
-        
-        if (success) {
-            request->send(200, "text/plain", "Print job sent successfully");
-        } else {
-            request->send(500, "text/plain", "Print job failed");
-        }
-    });
-    
-    // API endpoint - Print image (base64 encoded bitmap)
-    server.on("/api/print/image", HTTP_POST, [](AsyncWebServerRequest *request){
-        if (!printerConnected) {
-            request->send(400, "text/plain", "Printer not connected");
-            return;
-        }
-        
-        if (!request->hasParam("image", true) || !request->hasParam("width", true) || !request->hasParam("height", true)) {
-            request->send(400, "text/plain", "Missing parameters");
-            return;
-        }
-        
-        String imageData = request->getParam("image", true)->value();
-        int width = request->getParam("width", true)->value().toInt();
-        int height = request->getParam("height", true)->value().toInt();
-        
-        if (width <= 0 || height <= 0) {
-            request->send(400, "text/plain", "Invalid dimensions");
-            return;
-        }
-        
-        // TODO: Decode base64 image data and print
-        // For now, just acknowledge the request
-        Serial.printf("Printing image: %dx%d pixels\n", width, height);
-        
-        request->send(200, "text/plain", "Image print not implemented yet");
-    });
-    
-    // API endpoint - Reconnect printer
-    server.on("/api/reconnect", HTTP_POST, [](AsyncWebServerRequest *request){
-        Serial.println("Reconnecting printer...");
-        printer.disconnect();
-        initPrinter();
-        broadcastPrinterStatus();
-        request->send(200, "text/plain", "Reconnection attempt completed");
-    });
-    
-    // API endpoint - List supported printers
-    server.on("/api/printers", HTTP_GET, [](AsyncWebServerRequest *request){
-        DynamicJsonDocument doc(2048);
-        JsonArray printers = doc.createNestedArray("printers");
-        
-        const pt_dev_info* devices = PtouchPrinter::getSupportedDevices();
-        for (int i = 0; devices[i].vid != 0; i++) {
-            if (!(devices[i].flags & FLAG_PLITE)) {
-                JsonObject printer = printers.createNestedObject();
-                printer["name"] = devices[i].name;
-                printer["vid"] = devices[i].vid;
-                printer["pid"] = devices[i].pid;
-                printer["maxWidth"] = devices[i].max_px;
-                printer["dpi"] = devices[i].dpi;
-            }
-        }
-        
-        String response;
-        serializeJson(doc, response);
-        request->send(200, "application/json", response);
-    });
-    
-    // Handle 404
-    server.onNotFound([](AsyncWebServerRequest *request){
-        request->send(404, "text/plain", "Not found");
-    });
-    
-    server.begin();
-    Serial.println("Web server started");
+// HTTP request handlers
+
+// Root handler - serve index.html
+static esp_err_t root_get_handler(httpd_req_t *req)
+{
+    extern const unsigned char index_html_start[] asm("_binary_index_html_start");
+    extern const unsigned char index_html_end[] asm("_binary_index_html_end");
+    const size_t index_html_size = (index_html_end - index_html_start);
+
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_send(req, (const char *)index_html_start, index_html_size);
+    return ESP_OK;
 }
 
-void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
-    switch (type) {
-        case WS_EVT_CONNECT:
-            Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
-            broadcastPrinterStatus();
-            break;
-        
-        case WS_EVT_DISCONNECT:
-            Serial.printf("WebSocket client #%u disconnected\n", client->id());
-            break;
-        
-        case WS_EVT_DATA:
-            handleWebSocketMessage(arg, data, len);
-            break;
-        
-        case WS_EVT_PONG:
-        case WS_EVT_ERROR:
-            break;
-    }
-}
-
-void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
-    AwsFrameInfo *info = (AwsFrameInfo*)arg;
-    if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
-        String message = "";
-        for (size_t i = 0; i < len; i++) {
-            message += (char)data[i];
-        }
-        
-        DynamicJsonDocument doc(1024);
-        deserializeJson(doc, message);
-        
-        String command = doc["command"];
-        
-        if (command == "getStatus") {
-            broadcastPrinterStatus();
-        } else if (command == "printText") {
-            String text = doc["text"];
-            if (printerConnected && text.length() > 0) {
-                bool success = printer.printText(text.c_str());
-                
-                DynamicJsonDocument response(256);
-                response["type"] = "printResult";
-                response["success"] = success;
-                
-                String responseStr;
-                serializeJson(response, responseStr);
-                ws.textAll(responseStr);
-            }
-        } else if (command == "reconnect") {
-            printer.disconnect();
-            initPrinter();
-            broadcastPrinterStatus();
-        }
-    }
-}
-
-void broadcastPrinterStatus() {
-    DynamicJsonDocument doc(1024);
-    doc["type"] = "printerStatus";
+// API status endpoint
+static esp_err_t api_status_get_handler(httpd_req_t *req)
+{
+    JsonDocument doc;
     doc["connected"] = printerConnected;
     doc["name"] = printerName;
     doc["status"] = printerStatus;
     doc["maxWidth"] = printerMaxWidth;
     doc["tapeWidth"] = printerTapeWidth;
+
+    if (printerConnected && printer) {
+        doc["mediaType"] = printer->getMediaType();
+        doc["tapeColor"] = printer->getTapeColor();
+        doc["textColor"] = printer->getTextColor();
+        doc["hasError"] = printer->hasError();
+        if (printer->hasError()) {
+            doc["errorDescription"] = printer->getErrorDescription();
+        }
+    }
+
+    std::string response;
+    serializeJson(doc, response);
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, response.c_str(), response.length());
+    return ESP_OK;
+}
+
+// API print text endpoint
+static esp_err_t api_print_text_post_handler(httpd_req_t *req)
+{
+    char buf[1024];
+    int ret, remaining = req->content_len;
+
+    if (remaining >= sizeof(buf)) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Content too long");
+        return ESP_FAIL;
+    }
+
+    // Receive the content
+    ret = httpd_req_recv(req, buf, remaining);
+    if (ret <= 0) {
+        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+            httpd_resp_send_408(req);
+        }
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+
+    // Parse JSON
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, buf);
+    if (error) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+        return ESP_FAIL;
+    }
+
+    if (!doc.containsKey("text")) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing text parameter");
+        return ESP_FAIL;
+    }
+
+    const char* text = doc["text"];
+    if (!text || strlen(text) == 0) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty text");
+        return ESP_FAIL;
+    }
+
+    if (!printerConnected || !printer) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Printer not connected");
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "Printing text: %s", text);
+
+    bool success = printer->printText(text);
+
+    if (success) {
+        httpd_resp_send(req, "Print job sent successfully", HTTPD_RESP_USE_STRLEN);
+    } else {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Print job failed");
+    }
+
+    return ESP_OK;
+}
+
+// API reconnect endpoint
+static esp_err_t api_reconnect_post_handler(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "Reconnecting printer...");
     
-    if (printerConnected) {
-        doc["mediaType"] = printer.getMediaType();
-        doc["tapeColor"] = printer.getTapeColor();
-        doc["textColor"] = printer.getTextColor();
-        doc["hasError"] = printer.hasError();
-        if (printer.hasError()) {
-            doc["errorDescription"] = printer.getErrorDescription();
+    if (printer) {
+        printer->disconnect();
+        init_printer();
+    }
+    
+    httpd_resp_send(req, "Reconnection attempt completed", HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
+// API list printers endpoint
+static esp_err_t api_printers_get_handler(httpd_req_t *req)
+{
+    JsonDocument doc;
+    JsonArray printers = doc["printers"].to<JsonArray>();
+    
+    const pt_dev_info* devices = PtouchPrinter::getSupportedDevices();
+    for (int i = 0; devices[i].vid != 0; i++) {
+        if (!(devices[i].flags & FLAG_PLITE)) {
+            JsonObject printer = printers.add<JsonObject>();
+            printer["name"] = devices[i].name;
+            printer["vid"] = devices[i].vid;
+            printer["pid"] = devices[i].pid;
+            printer["maxWidth"] = devices[i].max_px;
+            printer["dpi"] = devices[i].dpi;
         }
     }
     
-    String message;
-    serializeJson(doc, message);
-    ws.textAll(message);
+    std::string response;
+    serializeJson(doc, response);
+    
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, response.c_str(), response.length());
+    return ESP_OK;
 }
 
-void checkPrinterStatus() {
-    if (printerConnected) {
-        // Try to get status from printer
-        if (!printer.getStatus()) {
-            // Connection might be lost
-            printerConnected = false;
-            printerStatus = "Connection lost";
-            Serial.println("Printer connection lost");
-            broadcastPrinterStatus();
-        } else {
-            // Update tape width if it changed
-            int currentTapeWidth = printer.getTapeWidth();
-            if (currentTapeWidth != printerTapeWidth) {
-                printerTapeWidth = currentTapeWidth;
-                Serial.printf("Tape width changed to: %d px\n", printerTapeWidth);
-                broadcastPrinterStatus();
+// Initialize HTTP server
+static esp_err_t start_webserver(void)
+{
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.server_port = WEB_SERVER_PORT;
+    config.max_uri_handlers = 16;
+
+    ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
+    if (httpd_start(&server, &config) == ESP_OK) {
+        ESP_LOGI(TAG, "Registering URI handlers");
+
+        // Root handler
+        httpd_uri_t root = {
+            .uri       = "/",
+            .method    = HTTP_GET,
+            .handler   = root_get_handler,
+            .user_ctx  = NULL
+        };
+        httpd_register_uri_handler(server, &root);
+
+        // API handlers
+        httpd_uri_t api_status = {
+            .uri       = "/api/status",
+            .method    = HTTP_GET,
+            .handler   = api_status_get_handler,
+            .user_ctx  = NULL
+        };
+        httpd_register_uri_handler(server, &api_status);
+
+        httpd_uri_t api_print_text = {
+            .uri       = "/api/print/text",
+            .method    = HTTP_POST,
+            .handler   = api_print_text_post_handler,
+            .user_ctx  = NULL
+        };
+        httpd_register_uri_handler(server, &api_print_text);
+
+        httpd_uri_t api_reconnect = {
+            .uri       = "/api/reconnect",
+            .method    = HTTP_POST,
+            .handler   = api_reconnect_post_handler,
+            .user_ctx  = NULL
+        };
+        httpd_register_uri_handler(server, &api_reconnect);
+
+        httpd_uri_t api_printers = {
+            .uri       = "/api/printers",
+            .method    = HTTP_GET,
+            .handler   = api_printers_get_handler,
+            .user_ctx  = NULL
+        };
+        httpd_register_uri_handler(server, &api_printers);
+
+        return ESP_OK;
+    }
+
+    ESP_LOGI(TAG, "Error starting server!");
+    return ESP_FAIL;
+}
+
+static void stop_webserver(void)
+{
+    if (server) {
+        httpd_stop(server);
+        server = NULL;
+    }
+}
+
+// Initialize printer
+static void init_printer(void)
+{
+    ESP_LOGI(TAG, "Initializing P-touch printer...");
+    
+    if (!printer) {
+        printer = new PtouchPrinter();
+    }
+    
+    printer->setVerbose(PRINTER_VERBOSE);
+    
+    if (printer->begin()) {
+        ESP_LOGI(TAG, "USB Host initialized");
+        
+        if (printer->detectPrinter()) {
+            if (printer->connect()) {
+                printerConnected = true;
+                strncpy(printerName, printer->getPrinterName(), sizeof(printerName) - 1);
+                printerMaxWidth = printer->getMaxWidth();
+                printerTapeWidth = printer->getTapeWidth();
+                strncpy(printerStatus, "Connected", sizeof(printerStatus) - 1);
+                
+                ESP_LOGI(TAG, "Printer connected: %s", printerName);
+                ESP_LOGI(TAG, "Max width: %d px, Tape width: %d px", printerMaxWidth, printerTapeWidth);
+            } else {
+                strncpy(printerStatus, "Connection failed", sizeof(printerStatus) - 1);
+                ESP_LOGI(TAG, "Failed to connect to printer");
             }
+        } else {
+            strncpy(printerStatus, "Not detected", sizeof(printerStatus) - 1);
+            ESP_LOGI(TAG, "No printer detected");
         }
     } else {
-        // Try to reconnect
-        if (printer.detectPrinter()) {
-            if (printer.connect()) {
-                printerConnected = true;
-                printerName = printer.getPrinterName();
-                printerMaxWidth = printer.getMaxWidth();
-                printerTapeWidth = printer.getTapeWidth();
-                printerStatus = "Connected";
-                
-                Serial.printf("Printer reconnected: %s\n", printerName.c_str());
-                broadcastPrinterStatus();
-            }
-        }
+        strncpy(printerStatus, "USB Host init failed", sizeof(printerStatus) - 1);
+        ESP_LOGI(TAG, "Failed to initialize USB Host");
     }
 }
 
-String processorPlaceholder(const String& var) {
-    if (var == "PRINTER_NAME") {
-        return printerName;
-    } else if (var == "PRINTER_STATUS") {
-        return printerStatus;
-    } else if (var == "WIFI_SSID") {
-        return WIFI_SSID;
-    } else if (var == "IP_ADDRESS") {
-        return WiFi.localIP().toString();
+// Printer status monitoring task
+static void printer_status_task(void *pvParameters)
+{
+    while (1) {
+        if (printerConnected && printer) {
+            // Try to get status from printer
+            if (!printer->getStatus()) {
+                // Connection might be lost
+                printerConnected = false;
+                strncpy(printerStatus, "Connection lost", sizeof(printerStatus) - 1);
+                ESP_LOGI(TAG, "Printer connection lost");
+            } else {
+                // Update tape width if it changed
+                int currentTapeWidth = printer->getTapeWidth();
+                if (currentTapeWidth != printerTapeWidth) {
+                    printerTapeWidth = currentTapeWidth;
+                    ESP_LOGI(TAG, "Tape width changed to: %d px", printerTapeWidth);
+                }
+            }
+        } else {
+            // Try to reconnect
+            if (printer && printer->detectPrinter()) {
+                if (printer->connect()) {
+                    printerConnected = true;
+                    strncpy(printerName, printer->getPrinterName(), sizeof(printerName) - 1);
+                    printerMaxWidth = printer->getMaxWidth();
+                    printerTapeWidth = printer->getTapeWidth();
+                    strncpy(printerStatus, "Connected", sizeof(printerStatus) - 1);
+                    
+                    ESP_LOGI(TAG, "Printer reconnected: %s", printerName);
+                }
+            }
+        }
+        
+        vTaskDelay(pdMS_TO_TICKS(PRINTER_STATUS_CHECK_INTERVAL));
     }
-    return String();
+}
+
+// Initialize SPIFFS
+static void init_spiffs(void)
+{
+    ESP_LOGI(TAG, "Initializing SPIFFS");
+
+    esp_vfs_spiffs_conf_t conf = {
+        .base_path = "/spiffs",
+        .partition_label = NULL,
+        .max_files = 5,
+        .format_if_mount_failed = true
+    };
+
+    esp_err_t ret = esp_vfs_spiffs_register(&conf);
+
+    if (ret != ESP_OK) {
+        if (ret == ESP_FAIL) {
+            ESP_LOGE(TAG, "Failed to mount or format filesystem");
+        } else if (ret == ESP_ERR_NOT_FOUND) {
+            ESP_LOGE(TAG, "Failed to find SPIFFS partition");
+        } else {
+            ESP_LOGE(TAG, "Failed to initialize SPIFFS (%s)", esp_err_to_name(ret));
+        }
+        return;
+    }
+
+    size_t total = 0, used = 0;
+    ret = esp_spiffs_info(NULL, &total, &used);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s)", esp_err_to_name(ret));
+    } else {
+        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
+    }
+}
+
+// Main application entry point
+extern "C" void app_main(void)
+{
+    ESP_LOGI(TAG, "Starting P-touch ESP32 Server...");
+
+    // Initialize NVS
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    // Initialize SPIFFS
+    init_spiffs();
+
+    // Initialize WiFi
+    wifi_init_sta();
+
+    // Initialize printer
+    init_printer();
+
+    // Start web server
+    start_webserver();
+
+    // Start printer status monitoring task
+    xTaskCreate(printer_status_task, "printer_status", 4096, NULL, 5, NULL);
+
+    ESP_LOGI(TAG, "Setup complete!");
+
+    // Get IP address
+    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (netif) {
+        esp_netif_ip_info_t ip_info;
+        if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
+            ESP_LOGI(TAG, "Web interface: http://" IPSTR, IP2STR(&ip_info.ip));
+        }
+    }
+
+    // Keep the app running
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
 } 

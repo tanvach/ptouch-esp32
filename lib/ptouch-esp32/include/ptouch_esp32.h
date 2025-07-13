@@ -1,9 +1,14 @@
 #ifndef PTOUCH_ESP32_H
 #define PTOUCH_ESP32_H
 
-#include <Arduino.h>
+#include <stdio.h>
 #include <stdint.h>
-#include <USB.h>
+#include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+#include "esp_log.h"
+#include "usb/usb_host.h"
 
 // Brother P-touch printer constants
 #define PTOUCH_VID                 0x04F9
@@ -80,17 +85,30 @@ struct __attribute__((packed, aligned(4))) ptouch_stat {
 // Main printer device class
 class PtouchPrinter {
 private:
-    void *usb_host;  // Placeholder for USB Host (not available in Arduino framework)
-    pt_dev_info *device_info;
-    ptouch_stat *status;
-    uint16_t tape_width_px;
-    bool is_connected;
-    bool is_initialized;
-    bool verbose_mode;
+    usb_host_client_handle_t client_hdl;  // USB Host client handle
+    usb_device_handle_t device_hdl;       // USB device handle
+    pt_dev_info *device_info;             // Device information
+    ptouch_stat *status;                  // Printer status
+    uint16_t tape_width_px;               // Current tape width in pixels
+    bool is_connected;                    // Connection status
+    bool is_initialized;                  // Initialization status
+    bool verbose_mode;                    // Verbose logging
+    bool usb_host_installed;              // USB Host driver status
+    
+    // USB endpoint addresses
+    uint8_t bulk_out_ep;                  // Bulk OUT endpoint address
+    uint8_t bulk_in_ep;                   // Bulk IN endpoint address
     
     // USB communication methods
     int usbSend(uint8_t *data, size_t len);
     int usbReceive(uint8_t *data, size_t len);
+    
+    // Device management
+    bool openDevice(uint16_t vid, uint16_t pid);
+    void closeDevice();
+    bool claimInterface();
+    void releaseInterface();
+    bool getEndpoints();
     
     // Printer initialization methods
     int initPrinter();
@@ -103,6 +121,9 @@ private:
     int rasterStart();
     int sendRasterLine(uint8_t *data, size_t len);
     void setRasterPixel(uint8_t* rasterline, size_t size, int pixel);
+
+    // USB Host callback functions
+    static void client_event_cb(const usb_host_client_event_msg_t *event_msg, void *arg);
 
 public:
     PtouchPrinter();
@@ -127,7 +148,7 @@ public:
     const char* getTapeColor() const;
     const char* getTextColor() const;
     bool hasError() const;
-    String getErrorDescription() const;
+    const char* getErrorDescription() const;
     
     // Printing methods
     bool printImage(const uint8_t *imageData, int width, int height, bool chain = false);
