@@ -2,6 +2,18 @@
 
 A web-based label printing server for Brother P-touch printers using **ESP32-S3-DevKitC-1** with ESP-IDF framework and USB Host support.
 
+**Based on the [ptouch-print](https://git.familie-radermacher.ch/linux/ptouch-print.git) library** - A comprehensive Brother P-touch protocol implementation with extensive debugging and fixes.
+
+## 📜 **License**
+
+This project is licensed under the **GNU General Public License v3.0** (GPL-3.0) as it is a derivative work of the [ptouch-print](https://git.familie-radermacher.ch/linux/ptouch-print.git) library.
+
+- **License**: [GPL-3.0](LICENSE)
+- **Original Work**: [ptouch-print library](https://git.familie-radermacher.ch/linux/ptouch-print.git) by Familie Radermacher
+- **Derivative Work**: ESP32-S3 port with web interface and USB Host implementation
+
+This means you are free to use, modify, and distribute this software under the terms of the GPL-3.0 license. See the [LICENSE](LICENSE) file for the full license text.
+
 ## 🎯 **Target Hardware**
 
 This project is specifically designed for the **[ESP32-S3-DevKitC-1 Development Board](https://www.espboards.dev/esp32/esp32-s3-devkitc-1/)** with the following specifications:
@@ -29,6 +41,7 @@ This project has been **successfully converted to ESP-IDF framework** with compl
 - **WebSocket Communication**: Real-time status updates
 - **Brother P-touch Protocol**: Complete protocol implementation (25+ models)
 - **Memory Optimization**: 28.5% flash usage (2.7MB available), 10.6% RAM usage
+- **Debug System**: Comprehensive USB packet logger and protocol analyzer
 
 ### **🧪 Ready for Hardware Testing**
 - **Direct USB Connection**: USB Host communication with Brother P-touch printers
@@ -39,15 +52,15 @@ This project has been **successfully converted to ESP-IDF framework** with compl
 ### **📊 Build Statistics**
 - **Build Status**: ✅ **SUCCESS**
 - **Compilation Time**: ~44 seconds
-- **Flash Usage**: 28.5% (897,260 / 3,145,728 bytes)
-- **RAM Usage**: 10.6% (34,752 / 327,680 bytes)
+- **Flash Usage**: 29.0% (911,804 / 3,145,728 bytes)
+- **RAM Usage**: 10.6% (34,896 / 327,680 bytes)
 - **Available Space**: **2.2MB flash remaining** for future features
 
-**Important Note:** The printer support is based on the extensively debugged [ptouch-print](https://git.familie-radermacher.ch/linux/ptouch-print.git) library with comprehensive protocol fixes. While the implementation is production-ready, individual printer models benefit from community testing.
+**Important Note:** The printer support is based on the extensively debugged [ptouch-print](https://git.familie-radermacher.ch/linux/ptouch-print.git) library with comprehensive protocol fixes and Brother P-touch protocol implementation. While the ESP32-S3 port is production-ready, individual printer models benefit from community testing.
 
 ## ✨ Features
 
-- 🖨️ **Brother P-touch Printer Support**: Complete protocol for 25+ Brother P-touch models
+- 🖨️ **Brother P-touch Printer Support**: Complete protocol for 25+ Brother P-touch models (derived from ptouch-print)
 - 🌐 **Modern Web Interface**: Responsive, mobile-friendly design with embedded assets
 - 📱 **Cross-Platform**: Works on desktop, tablet, and mobile devices
 - 🔌 **Native USB Host**: Direct USB connection using ESP32-S3 USB Host APIs
@@ -409,4 +422,31 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 
 ---
 
-**Disclaimer**: This project is not affiliated with Brother Industries, Ltd. Brother and P-touch are registered trademarks of Brother Industries, Ltd. 
+## 📜 **License & Attribution**
+
+This project is licensed under the **GNU General Public License v3.0** (GPL-3.0).
+
+### **Original Work Attribution**
+- **Based on**: [ptouch-print library](https://git.familie-radermacher.ch/linux/ptouch-print.git)
+- **Original Authors**: Familie Radermacher and contributors
+- **Original License**: GPL-3.0
+- **Derivative Work**: ESP32-S3 port with web interface and USB Host implementation
+
+### **GPL-3.0 License Summary**
+- ✅ **Commercial Use**: Permitted
+- ✅ **Modification**: Permitted  
+- ✅ **Distribution**: Permitted
+- ✅ **Private Use**: Permitted
+- ❗ **License and Copyright Notice**: Required
+- ❗ **State Changes**: Must document modifications
+- ❗ **Disclose Source**: Must provide source code
+- ❗ **Same License**: Derivative works must use GPL-3.0
+
+For the full license text, see the [LICENSE](LICENSE) file.
+
+### **Contributing**
+By contributing to this project, you agree that your contributions will be licensed under the GPL-3.0 license.
+
+---
+
+**Disclaimer**: This project is not affiliated with Brother Industries, Ltd. Brother and P-touch are registered trademarks of Brother Industries, Ltd. This software is provided "as is" without warranty of any kind as specified in the GPL-3.0 license. 
