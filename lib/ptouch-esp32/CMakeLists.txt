@@ -1,0 +1,17 @@
+idf_component_register(
+    SRCS
+        "src/ptouch_printer.cpp"
+        "src/ptouch_printing.cpp"
+        "src/ptouch_image.cpp"
+        "src/ptouch_utils.cpp"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        "usb"
+        "esp_http_server"
+        "esp_wifi"
+        "nvs_flash"
+        "spiffs"
+        "freertos"
+        "log"
+) 

@@ -126,15 +126,26 @@ static void wifi_init_sta(void)
 
 // HTTP request handlers
 
-// Root handler - serve index.html
+// Root handler - serve simple HTML
 static esp_err_t root_get_handler(httpd_req_t *req)
 {
-    extern const unsigned char index_html_start[] asm("_binary_index_html_start");
-    extern const unsigned char index_html_end[] asm("_binary_index_html_end");
-    const size_t index_html_size = (index_html_end - index_html_start);
+    const char* simple_html = R"(
+<!DOCTYPE html>
+<html><head><title>P-touch ESP32</title></head>
+<body>
+<h1>P-touch ESP32 Label Printer</h1>
+<p>Web interface temporarily disabled. Use API endpoints directly:</p>
+<ul>
+<li>GET /api/status - Printer status</li>
+<li>POST /api/print/text - Print text (JSON: {"text": "your text"})</li>
+<li>POST /api/reconnect - Reconnect printer</li>
+<li>GET /api/printers - List supported printers</li>
+</ul>
+</body></html>
+)";
 
     httpd_resp_set_type(req, "text/html");
-    httpd_resp_send(req, (const char *)index_html_start, index_html_size);
+    httpd_resp_send(req, simple_html, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
@@ -195,7 +206,7 @@ static esp_err_t api_print_text_post_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    if (!doc.containsKey("text")) {
+    if (!doc["text"].is<const char*>()) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing text parameter");
         return ESP_FAIL;
     }
