@@ -20,22 +20,25 @@ cd test/hardware
 
 ### Step 3: Build and Flash
 
-**Option A: PlatformIO (Recommended)**
+**Option A: ESP-IDF (Recommended)**
 ```bash
+# Set up ESP-IDF environment (if not already done)
+source ~/esp/esp-idf/export.sh  # or wherever you installed ESP-IDF
+
+# Build and flash
+idf.py set-target esp32s3
+idf.py build flash monitor
+```
+
+**Option B: PlatformIO (May have toolchain issues on macOS)**
+```bash
+# Clean build first
+pio run --target clean
+
 # All tests
 pio run --target upload && pio device monitor
 
-# USB Host tests only
-pio run -e esp32s3_usb_host_tests --target upload && pio device monitor
-
-# Core systems tests only
-pio run -e esp32s3_core_tests --target upload && pio device monitor
-```
-
-**Option B: ESP-IDF**
-```bash
-idf.py set-target esp32s3
-idf.py build flash monitor
+# If you encounter toolchain errors, use ESP-IDF instead
 ```
 
 ### Step 4: Watch the Results
